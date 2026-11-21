@@ -155,7 +155,8 @@ function launch(profile) {
     case 'bash': return { args: ['--rcfile', slash(f('init.bash')), '-i'], env };
     case 'zsh': return { args: IS_MAC ? ['-l', '-i'] : ['-i'], env: { ...env, TC_REAL_ZDOTDIR: process.env.ZDOTDIR || os.homedir(), ZDOTDIR: f('zsh') } };
     case 'pwsh': return { args: ['-NoLogo', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', `. '${f('init.ps1').replace(/'/g, "''")}'`], env };
-    case 'cmd': return { args: ['/K', `doskey /macrofile="${f('macros.doskey')}"`], env };
+    // cmd: node-pty przekazuje napis jako gotową linię poleceń (tablica zepsułaby cudzysłowy wokół ścieżki)
+    case 'cmd': return { args: `/K doskey /macrofile="${f('macros.doskey')}"`, env };
     default: return { args: [], env };
   }
 }
@@ -370,7 +371,7 @@ async function runSmoke() {
     // 2. Powłoki: własne komendy, lista komend, wiadomości do aplikacji
     const testable = PROFILES.filter(p => ['pwsh', 'cmd', 'bash'].includes(p.kind));
     for (const prof of testable) {
-      smokeMsgs.length = 0;
+      await wait(1500); drainInbox(); smokeMsgs.length = 0;
       const lines = prof.kind === 'cmd' ? ['komendy', 'hej Ola', 'settings terminal', 'exit'] : ['komendy', 'hej Ola', 'settings terminal', 'dodaj-komende testowa "dziala"', 'exit'];
       const out = await runPty(prof, lines);
       await wait(1500); drainInbox();
