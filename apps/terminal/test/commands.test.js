@@ -36,5 +36,7 @@ assert.strictEqual(Buffer.from(add.slice(4), 'base64').toString('utf8'), 'run\tn
 const ps = fs.readFileSync(path.join(dir, 'commands.ps1'), 'utf8');
 assert.match(ps, /function global:hej \{\r\n  Write-Output "Cześć \$\(\$args\[0\]\)! `"cytat`" `\$HOME ``x`` \\n \$\(\$args -join ' '\)"/);
 const dos = fs.readFileSync(path.join(dir, 'macros.doskey'), 'utf8');
-assert.match(dos, /^settings=echo panel;\$1\$G"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%\.msg"\r$/m);
+assert.match(dos, /^settings=@echo panel;\$1\$G"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%\.msg"\r$/m);
+assert.match(dos, /^dwa=@echo pierwszy \$1 \$T @echo drugi\r$/m);
+assert.match(dos, /^hej=@echo Cześć \$1!/m);
 console.log('OK: wszystkie testy generatora komend przeszły');

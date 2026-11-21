@@ -182,11 +182,12 @@ function global:prompt { __tc_reload; & $global:__TC_PROMPT }
 // ---------- cmd (doskey) ----------
 const dk = b => b.replace(/[$<>|]/g, ch => ({ '$': '$$', '<': '$L', '>': '$G', '|': '$B' }[ch])).replace(PH, (m, k) =>
   k === 'args' ? '$*' : k === 'date' ? '%DATE%' : k === 'time' ? '%TIME:~0,5%' : k === 'user' ? '%USERNAME%' : (+k <= 9 ? '$' + k : ''));
-const echoLines = text => text.split('\n').map(l => l.trim() ? 'echo ' + dk(l) : 'echo.').join(' $T ');
+// '@' wycisza echo samej komendy, inaczej cmd pokazywałby prompt przed każdą linią
+const echoLines = text => text.split('\n').map(l => l.trim() ? '@echo ' + dk(l) : '@echo.').join(' $T ');
 
 function doskey(cmds) {
-  const L = cmds.map(c => c.name + '=' + (c.type === 'text' ? echoLines(c.body) : dk(c.body.trim()).replace(/\s*[;\n]\s*/g, ' $T ')));
-  const msg = m => `echo ${m}$G"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%.msg"`;
+  const L = cmds.map(c => c.name + '=' + (c.type === 'text' ? echoLines(c.body) : dk(c.body.trim()).split(/\s*[;\n]\s*/).filter(Boolean).map(x => '@' + x).join(' $T ')));
+  const msg = m => `@echo ${m}$G"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%.msg"`;
   L.push('settings=' + msg('panel;$1'), 'ustawienia=' + msg('panel;$1'), 'tutorial=' + msg('tutorial;'));
   L.push('krycie=' + msg('opacity;$1'), 'czcionka=' + msg('font;$1'), 'motyw=' + msg('theme;$1'));
   const help = listing(cmds, false) + '\n\nKomendy Prism: settings, krycie 0-100, czcionka 10-28, motyw NAZWA, tutorial\n(dodawanie komend z terminala działa w PowerShell)';

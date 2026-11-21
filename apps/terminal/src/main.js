@@ -156,7 +156,8 @@ function launch(profile) {
     case 'zsh': return { args: IS_MAC ? ['-l', '-i'] : ['-i'], env: { ...env, TC_REAL_ZDOTDIR: process.env.ZDOTDIR || os.homedir(), ZDOTDIR: f('zsh') } };
     case 'pwsh': return { args: ['-NoLogo', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', `. '${f('init.ps1').replace(/'/g, "''")}'`], env };
     // cmd: node-pty przekazuje napis jako gotową linię poleceń (tablica zepsułaby cudzysłowy wokół ścieżki)
-    case 'cmd': return { args: `/K doskey /macrofile="${f('macros.doskey')}"`, env };
+    // chcp 65001: makra i polskie znaki w UTF-8
+    case 'cmd': return { args: `/K chcp 65001 >nul & doskey /macrofile="${f('macros.doskey')}"`, env };
     default: return { args: [], env };
   }
 }
