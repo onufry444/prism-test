@@ -9,32 +9,41 @@
   prism apply <motyw> -DryRun        tylko wygeneruj pliki do folderu -OutDir, niczego nie zmieniaj
   prism restore                      przywróć oryginalny wygląd z kopii
   prism status                       co jest teraz włączone
+  prism update                       aktualizacja Prism do najnowszej wersji
+  prism uninstall                    usuwa Prism (najpierw przywraca oryginalny wygląd)
 
 .PARAMETER SkipInstall
   Nie instaluj brakujących programów (GlazeWM, Windhawk) przez winget.
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Position = 0)][ValidateSet('list', 'apply', 'restore', 'status', 'help')][string]$Command = 'help',
+  [Parameter(Position = 0)][ValidateSet('list', 'apply', 'restore', 'status', 'update', 'uninstall', 'help')][string]$Command = 'help',
   [Parameter(Position = 1)][string]$Theme,
   [switch]$SkipInstall,
   [switch]$DryRun,
+  [switch]$Force,
   [string]$OutDir = 'prism-out'
 )
 
 $ErrorActionPreference = 'Stop'
+# Gdy wynik czyta inny program (np. ustawienia Prism), wysyłaj go w UTF-8, żeby polskie znaki dotarły poprawnie.
+if ([Console]::IsOutputRedirected) { try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch {} }
 $Root      = Split-Path -Parent $PSScriptRoot
 $ThemesDir = Join-Path $Root 'themes'
 $DataDir   = Join-Path $env:LOCALAPPDATA 'Prism'
 $BackupDir = Join-Path $DataDir 'backup'
 $BackupFile  = Join-Path $DataDir 'backup.json'
 $CurrentFile = Join-Path $DataDir 'current.json'
+$UserThemesDir = Join-Path $DataDir 'themes'
+$AppDir      = Join-Path $DataDir 'app'
+$BinDir      = Join-Path $DataDir 'bin'
+$InstallUrl  = 'https://raw.githubusercontent.com/onufry444/prism/main/install.ps1'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 $GlazeConfig    = Join-Path $env:USERPROFILE '.glzr\glazewm\config.yaml'
 $GlazeExe       = Join-Path $env:ProgramFiles 'glzr.io\glazewm.exe'
 $GlazeCli       = Join-Path $env:ProgramFiles 'glzr.io\cli\glazewm.exe'
-$TerminalConfig = Join-Path $env:APPDATA 'Szkło Terminal\settings.json'
+$TerminalConfig = Join-Path $env:APPDATA 'Prism\settings.json'
 $StartupLink    = Join-Path ([Environment]::GetFolderPath('Startup')) 'Prism GlazeWM.lnk'
 
 $PersonalizeKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
@@ -106,9 +115,15 @@ function Split-Rgb([string]$Hex) {
 
 # ---------------------------------------------------------------- motywy
 function Get-ThemeList {
-  Get-ChildItem -Path $ThemesDir -Filter '*.json' | Where-Object { $_.Name -ne 'schema.json' } | ForEach-Object {
-    $t = Read-Json $_.FullName
-    [pscustomobject]@{ Id = $_.BaseName; Name = $t.name; Description = $t.description }
+  $seen = @{}
+  foreach ($dir in @($UserThemesDir, $ThemesDir)) {
+    if (-not (Test-Path -LiteralPath $dir)) { continue }
+    foreach ($f in (Get-ChildItem -LiteralPath $dir -Filter '*.json' | Where-Object { $_.Name -ne 'schema.json' })) {
+      if ($seen.ContainsKey($f.BaseName)) { continue }
+      $seen[$f.BaseName] = $true
+      try { $t = Read-Json $f.FullName } catch { continue }
+      [pscustomobject]@{ Id = $f.BaseName; Name = $t.name; Own = ($dir -eq $UserThemesDir); Description = $t.description }
+    }
   }
 }
 
@@ -148,7 +163,10 @@ function Test-Theme($T, [string]$Path) {
 function Read-Theme([string]$IdOrPath) {
   if (-not $IdOrPath) { throw 'Podaj motyw, np.: prism apply kafel   (lista: prism list)' }
   if (Test-Path -LiteralPath $IdOrPath -PathType Leaf) { $path = (Resolve-Path -LiteralPath $IdOrPath).Path }
-  else { $path = Join-Path $ThemesDir "$IdOrPath.json" }
+  else {
+    $path = Join-Path $UserThemesDir "$IdOrPath.json"
+    if (-not (Test-Path -LiteralPath $path)) { $path = Join-Path $ThemesDir "$IdOrPath.json" }
+  }
   if (-not (Test-Path -LiteralPath $path)) { throw "Nie ma motywu '$IdOrPath'. Lista: prism list" }
   $t = Read-Json $path
   Test-Theme $t $path
@@ -528,7 +546,7 @@ function Invoke-Apply {
   if ($termOn) {
     Write-Step 'Motyw Szkło Terminala'
     Update-TerminalSettings $T $TerminalConfig
-    Write-Note 'Terminal: apps\terminal (npm install, npm start). Rozmycie zmieni się po jego ponownym uruchomieniu.'
+    Write-Note 'Kolory terminala zmienią się od razu, rozmycie po ponownym uruchomieniu Prism.'
   }
 
   Send-SettingChange
@@ -554,10 +572,52 @@ function Show-Status {
   Write-Note ("GlazeWM: " + $(if (Get-Process -Name glazewm -ErrorAction SilentlyContinue) { 'działa' } else { 'nie działa' }))
 }
 
+function Invoke-Update {
+  Write-Step 'Otwieram aktualizację w osobnym oknie (Prism zostanie na chwilę zamknięty)'
+  Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', "irm $InstallUrl | iex"
+}
+
+function Remove-FromUserPath([string]$Dir) {
+  $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+  try {
+    $cur = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $all = @($cur -split ';' | Where-Object { $_ })
+    $keep = @($all | Where-Object { $_.TrimEnd('\') -ne $Dir.TrimEnd('\') })
+    if ($keep.Count -ne $all.Count) {
+      $key.SetValue('Path', ($keep -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+      [Environment]::SetEnvironmentVariable('PRISM_INSTALLED', $null, 'User')  # wysyła WM_SETTINGCHANGE
+    }
+  } finally { $key.Close() }
+}
+
+function Invoke-Uninstall {
+  if ($env:TERM_PROGRAM -eq 'Prism') {
+    Write-Step 'Prism nie usunie sam siebie od środka. Otwieram dezinstalację w osobnym oknie.'
+    $a2 = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', $PSCommandPath, 'uninstall')
+    if ($Force) { $a2 += '-Force' }
+    Start-Process -FilePath 'powershell.exe' -ArgumentList $a2
+    return
+  }
+  if (-not $Force) {
+    $a = Read-Host '  Usunąć Prism z tego komputera? Najpierw przywrócę oryginalny wygląd Windows. Wpisz TAK'
+    if ($a -ne 'TAK') { Write-Note 'Anulowano.'; return }
+  }
+  if (Test-Path $BackupFile) { Invoke-Restore }
+  Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($AppDir, [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force
+  Start-Sleep -Milliseconds 600
+  Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Prism.lnk') -ErrorAction SilentlyContinue
+  Remove-FromUserPath $BinDir
+  foreach ($d in $BinDir, $AppDir) { if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force } }
+  Write-Ok 'Prism został usunięty.'
+  if (Test-Path -LiteralPath $DataDir) { Write-Note "Twoje motywy i kopie ustawień zostały w $DataDir. Możesz usunąć ten folder ręcznie." }
+}
+
 switch ($Command) {
-  'list'    { Get-ThemeList | Format-Table -AutoSize Id, Name, Description }
+  'list'    { Get-ThemeList | Format-Table -AutoSize Id, Name, @{ n = 'Twój'; e = { if ($_.Own) { 'tak' } else { '' } } }, Description }
   'apply'   { Invoke-Apply }
   'restore' { Invoke-Restore }
   'status'  { Show-Status }
+  'update'  { Invoke-Update }
+  'uninstall' { Invoke-Uninstall }
   default   { Get-Help $PSCommandPath -Detailed | Out-String | Write-Host }
 }

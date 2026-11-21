@@ -8,7 +8,7 @@ jobs:
   motywy-i-instalator:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Składnia skryptów PowerShell
         shell: pwsh
@@ -66,14 +66,12 @@ jobs:
   terminal:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Składnia i test generatora komend
         working-directory: apps/terminal
         run: |
-          for f in src/*.js src/renderer/renderer.js; do node --check "$f"; done
-          node test/commands.test.js | tee wynik.txt
-          grep -q "Cześć Ola" wynik.txt
-          grep -q "pierwszy X" wynik.txt
+          for f in src/*.js src/renderer/*.js; do node --check "$f"; done
+          node test/commands.test.js

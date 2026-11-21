@@ -2,14 +2,16 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
-<title>Szkło Terminal</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: file:">
+<title>Prism</title>
 <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="settings.css">
 </head>
 <body>
 <div id="app">
   <header class="bar">
+    <span class="logo" aria-hidden="true"></span>
     <div class="tabs" id="tabs"></div>
     <div class="newtab">
       <button class="ic" id="add" title="Nowa karta (Ctrl+Shift+T)" aria-label="Nowa karta">+</button>
@@ -29,63 +31,28 @@
 
   <main id="terms"></main>
 
-  <aside id="panel" hidden>
-    <div class="phead">
-      <div class="seg" id="seg"><button class="on" data-p="look">Wygląd</button><button data-p="cmd">Komendy</button><button data-p="gen">Ogólne</button></div>
-      <button class="ic" id="closePanel" aria-label="Zamknij panel">✕</button>
+  <section id="settings" hidden aria-label="Ustawienia Prism">
+    <nav class="snav" id="sNav"></nav>
+    <div class="smain" id="sMain">
+      <header class="shead">
+        <div><h1 id="sTitle"></h1><p id="sSub"></p></div>
+        <button class="ic" id="sClose" title="Zamknij (Esc)" aria-label="Zamknij ustawienia">✕</button>
+      </header>
+      <div id="sTour"></div>
+      <div class="sgrid">
+        <div class="scontent" id="sContent"></div>
+        <aside class="spv" id="sPreview"></aside>
+      </div>
     </div>
+  </section>
 
-    <section data-sec="look">
-      <div class="presets" id="presets"></div>
-      <div class="f"><label for="opacity">Krycie tła <span id="opacityV"></span></label><input type="range" id="opacity" min="0" max="100"></div>
-      <div class="cols">
-        <div class="f"><label for="bg">Tło</label><input type="color" id="bg"></div>
-        <div class="f"><label for="fg">Tekst</label><input type="color" id="fg"></div>
-        <div class="f"><label for="accent">Akcent</label><input type="color" id="accent"></div>
-      </div>
-      <div class="f"><label for="ansi">Kolory ANSI</label><select id="ansi"><option value="dark">Do ciemnego tła</option><option value="light">Do jasnego tła</option></select></div>
-      <div class="f"><label for="font">Czcionka</label><input id="font" list="fonts" spellcheck="false">
-        <datalist id="fonts"><option value='"Cascadia Code", Consolas, monospace'><option value='"JetBrains Mono", monospace'><option value='"Fira Code", monospace'><option value='Menlo, monospace'><option value='"SF Mono", Menlo, monospace'><option value='Consolas, monospace'><option value='"Ubuntu Mono", monospace'></datalist>
-        <p class="hint">Czcionka musi być zainstalowana w systemie.</p></div>
-      <div class="f"><label for="size">Rozmiar <span id="sizeV"></span></label><input type="range" id="size" min="10" max="28"></div>
-      <div class="f"><label for="lineHeight">Wysokość linii <span id="lineHeightV"></span></label><input type="range" id="lineHeight" min="1" max="1.8" step="0.05"></div>
-      <div class="f"><label for="padding">Margines <span id="paddingV"></span></label><input type="range" id="padding" min="0" max="40"></div>
-      <div class="f"><label for="radius">Zaokrąglenie okna <span id="radiusV"></span></label><input type="range" id="radius" min="0" max="24"></div>
-      <div class="cols two">
-        <div class="f"><label for="cursor">Kursor</label><select id="cursor"><option value="block">Blok</option><option value="bar">Kreska</option><option value="underline">Podkreślenie</option></select></div>
-        <div class="f"><label for="blink">Miganie</label><select id="blink"><option value="1">Tak</option><option value="0">Nie</option></select></div>
-      </div>
-    </section>
-
-    <section data-sec="cmd" hidden>
-      <p class="hint top">Komendy działają w PowerShell, bash, zsh i cmd jak zwykłe polecenia: z potokami i argumentami. W otwartych kartach pojawiają się po następnym Enterze (w cmd dopiero w nowej karcie).</p>
-      <ul class="cmds" id="cmds"></ul>
-      <form id="cmdForm">
-        <h3 id="formTitle">Nowa komenda</h3>
-        <div class="f"><label for="cName">Nazwa</label><input id="cName" spellcheck="false" autocapitalize="off" placeholder="np. projekt" required></div>
-        <div class="f"><label for="cType">Co robi</label><select id="cType"><option value="text">Wypisuje tekst</option><option value="run">Uruchamia polecenia</option></select></div>
-        <div class="f"><label for="cBody">Treść</label><textarea id="cBody" spellcheck="false" required placeholder="cd ~/projekty/strona; code ."></textarea>
-          <p class="hint">Zmienne: <code>{1}</code> <code>{2}</code>… argumenty, <code>{args}</code> wszystkie, <code>{date}</code>, <code>{time}</code>, <code>{user}</code>. Polecenia oddzielaj średnikiem albo nową linią.</p></div>
-        <div class="f"><label for="cDesc">Opis (opcjonalnie)</label><input id="cDesc"></div>
-        <p class="err" id="cErr"></p>
-        <div class="row"><button class="btn" type="submit">Zapisz</button><button class="btn ghost" type="button" id="cCancel" hidden>Anuluj</button></div>
-      </form>
-    </section>
-
-    <section data-sec="gen" hidden>
-      <div class="f"><label for="defProfile">Domyślna powłoka</label><select id="defProfile"></select></div>
-      <div class="f check"><label><input type="checkbox" id="desktopBlur"> Rozmycie pulpitu za oknem</label>
-        <p class="hint" id="blurHint">Windows 11 i macOS. Zmiana działa po ponownym uruchomieniu.</p>
-        <button class="btn ghost" type="button" id="relaunch" hidden>Uruchom ponownie</button></div>
-      <h3>Skróty</h3>
-      <table class="keys" id="keys"></table>
-    </section>
-  </aside>
+  <aside id="tour" hidden aria-label="Samouczek"></aside>
   <div id="toast" role="status"></div>
 </div>
 <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
 <script src="renderer.js"></script>
+<script src="settings.js"></script>
 </body>
 </html>

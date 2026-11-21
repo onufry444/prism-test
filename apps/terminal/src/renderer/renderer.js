@@ -1,9 +1,13 @@
 'use strict';
+// Prism: karty terminala, skróty, wiadomości z powłoki, powitanie i samouczek.
+// Ustawienia (settings.js) korzystają ze wspólnego obiektu window.Prism.
 {
 const api = window.api;
 const $ = s => document.querySelector(s);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MAC = api.platform === 'darwin';
+const rgb = h => { const n = parseInt(String(h).slice(1), 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const hexA = (h, a) => { const [r, g, b] = rgb(h); return `rgba(${r},${g},${b},${a})`; };
 
 const ANSI = {
   dark: { black: '#1d1f21', red: '#ff6b6b', green: '#7ee787', yellow: '#f2cc60', blue: '#79c0ff', magenta: '#d2a8ff', cyan: '#76e3ea', white: '#d0d0d0',
@@ -19,111 +23,115 @@ const PRESETS = [
   { id: 'morze', n: 'Morze', opacity: 62, bg: '#0a1f2e', fg: '#d6ecf5', accent: '#5cc8ff', ansi: 'dark' },
   { id: 'sliwka', n: 'Śliwka', opacity: 58, bg: '#1e0f24', fg: '#f2e4f5', accent: '#ff8fb1', ansi: 'dark' }
 ];
-const KEYS = [
-  ['Nowa karta', 'Ctrl+Shift+T'], ['Zamknij kartę', 'Ctrl+Shift+W'], ['Następna / poprzednia karta', 'Ctrl+Tab / Ctrl+Shift+Tab'],
-  ['Karta 1–9', 'Alt+1…9'], ['Kopiuj', 'Ctrl+Shift+C (lub Ctrl+C z zaznaczeniem)'], ['Wklej', 'Ctrl+Shift+V / Ctrl+V'],
-  ['Większa / mniejsza czcionka', 'Ctrl+= / Ctrl+−'], ['Ustawienia', 'Ctrl+,'], ['Szukaj w historii', 'zależnie od powłoki']
-].map(([a, b]) => MAC ? [a, b.replace(/Ctrl\+Shift\+([TWCV])/g, 'Cmd+$1').replace(/Ctrl\+([,=−])/g, 'Cmd+$1')] : [a, b]);
 
-let S, PROFILES, ACRYLIC;
-const tabs = [];
-let active = null;
+const P = window.Prism = { api, $, esc, rgb, hexA, ANSI, PRESETS, MAC, S: null, profiles: [], tabs: [], active: null, acrylic: false };
+const events = {};
+P.on = (n, f) => (events[n] = events[n] || []).push(f);
+P.emit = (n, ...a) => (events[n] || []).forEach(f => f(...a));
 
-// ---------- zapis ustawień (z opóźnieniem) ----------
+// ---------- zapis ustawień ----------
 let saveT;
-function save(now) {
+P.save = now => {
   clearTimeout(saveT);
-  const run = () => api.setSettings({ look: S.look, commands: S.commands, defaultProfile: S.defaultProfile, desktopBlur: S.desktopBlur }).then(s => { S.commands = s.commands; renderCmds(); });
-  now ? run() : (saveT = setTimeout(run, 250));
-}
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 1800); }
+  const S = P.S;
+  const run = () => api.setSettings({ look: S.look, commands: S.commands, defaultProfile: S.defaultProfile, desktopBlur: S.desktopBlur, onboarding: S.onboarding })
+    .then(s => { P.S.commands = s.commands; P.emit('commands'); });
+  if (now) run(); else saveT = setTimeout(run, 250);
+};
+P.toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(P.toast.t); P.toast.t = setTimeout(() => t.classList.remove('show'), 2400); };
 
-// ---------- wygląd ----------
-const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+// ---------- wygląd terminala ----------
 function termOptions() {
-  const L = S.look;
+  const L = P.S.look;
   return {
     fontFamily: L.font, fontSize: L.size, lineHeight: L.lineHeight, cursorStyle: L.cursor, cursorBlink: L.blink,
-    theme: { background: 'rgba(0,0,0,0)', foreground: L.fg, cursor: L.accent, cursorAccent: L.bg, selectionBackground: L.accent + '55', ...ANSI[L.ansi] }
+    theme: { background: 'rgba(0,0,0,0)', foreground: L.fg, cursor: L.accent, cursorAccent: L.bg, selectionBackground: L.accent + '55', ...ANSI[L.ansi] || ANSI.dark }
   };
 }
-function applyLook() {
-  const L = S.look, r = document.documentElement.style, [a, b, c] = rgb(L.bg);
-  r.setProperty('--tbg', `rgba(${a},${b},${c},${L.opacity / 100})`);
+P.applyLook = () => {
+  const L = P.S.look, r = document.documentElement.style;
+  r.setProperty('--tbg', hexA(L.bg, L.opacity / 100));
   r.setProperty('--solid', L.bg); r.setProperty('--fg', L.fg); r.setProperty('--ac', L.accent);
   r.setProperty('--pad', L.padding + 'px'); r.setProperty('--rad', L.radius + 'px'); r.setProperty('--mono', L.font);
-  for (const t of tabs) { Object.assign(t.term.options, termOptions()); }
+  for (const t of P.tabs) Object.assign(t.term.options, termOptions());
   fitActive();
-  syncForm();
-}
-const fields = { opacity: '%', size: ' px', lineHeight: '', padding: ' px', radius: ' px' };
-function syncForm() {
-  const L = S.look;
-  for (const k of ['opacity', 'bg', 'fg', 'accent', 'ansi', 'size', 'lineHeight', 'padding', 'radius', 'cursor']) { const el = $('#' + k); if (document.activeElement !== el) el.value = L[k]; }
-  if (document.activeElement !== $('#font')) $('#font').value = L.font;
-  $('#blink').value = L.blink ? '1' : '0';
-  for (const [k, u] of Object.entries(fields)) $('#' + k + 'V').textContent = (k === 'lineHeight' ? (+L[k]).toFixed(2) : L[k]) + u;
-  document.querySelectorAll('.pre').forEach(p => p.classList.toggle('on', p.dataset.id === L.preset));
-}
-function setLook(patch, custom = true) { Object.assign(S.look, patch, custom ? { preset: null } : {}); applyLook(); save(); }
-function usePreset(id) {
+  P.emit('look');
+};
+P.setLook = (patch, custom = true) => { Object.assign(P.S.look, patch, custom ? { preset: null } : {}); P.applyLook(); P.save(); };
+P.usePreset = id => {
   const p = PRESETS.find(p => p.id === id || p.n.toLowerCase() === String(id).toLowerCase());
   if (!p) return false;
-  setLook({ opacity: p.opacity, bg: p.bg, fg: p.fg, accent: p.accent, ansi: p.ansi, preset: p.id }, false);
+  P.setLook({ opacity: p.opacity, bg: p.bg, fg: p.fg, accent: p.accent, ansi: p.ansi, preset: p.id }, false);
   return true;
-}
+};
 
 // ---------- karty ----------
-function fitActive() { if (!active) return; try { active.fit.fit(); } catch {} }
-async function newTab(profileId) {
+function fitActive() { if (!P.active) return; try { P.active.fit.fit(); } catch {} }
+function welcome() {
+  const [r, g, b] = rgb(P.S.look.accent), A = `\x1b[38;2;${r};${g};${b}m`, B = '\x1b[1m', D = '\x1b[2m', R = '\x1b[0m';
+  return [
+    '', `  ${A}◆${R}  ${B}Witaj w Prism${R}`,
+    `     ${D}Twój terminal i centrum sterowania wyglądem Windowsa.${R}`, '',
+    `     ${A}settings${R}          ustawienia: motyw Windows, kolory, tapeta, okna`,
+    `     ${A}pomoc${R}             wszystkie komendy Prism`,
+    `     ${A}dodaj-komende${R}     własna komenda, np. dodaj-komende hej "Cześć {1}!"`,
+    `     ${A}tutorial${R}          samouczek krok po kroku`, '',
+    `     ${D}Samouczek czeka w prawym dolnym rogu. W ustawieniach wszystko klikasz myszką.${R}`, '', ''
+  ].join('\r\n');
+}
+P.newTab = async (profileId, opts = {}) => {
   const el = document.createElement('div');
   el.className = 'term';
   $('#terms').appendChild(el);
-  const term = new Terminal({ ...termOptions(), allowTransparency: true, scrollback: 10000, allowProposedApi: true, macOptionIsMeta: true });
+  const term = new Terminal({ ...termOptions(), allowTransparency: true, scrollback: 10000, macOptionIsMeta: true });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => api.openExternal(uri)));
   term.open(el);
   const t = { id: crypto.randomUUID(), term, fit, el, title: '…', profile: null };
-  tabs.push(t);
+  P.tabs.push(t);
   activate(t);
+  if (opts.welcome) term.write(welcome());
   term.onData(d => api.write(t.id, d));
   term.onResize(({ cols, rows }) => api.resize(t.id, cols, rows));
   term.onTitleChange(s => { t.title = s || t.profile?.name || 'terminal'; renderTabs(); });
-  term.parser.registerOscHandler(7777, d => { handleOsc(d); return true; });
+  term.parser.registerOscHandler(7777, d => { handleMsg(d); return true; });
   term.attachCustomKeyEventHandler(e => keys(e, t));
   const r = await api.create(t.id, profileId, term.cols, term.rows);
   t.profile = r.profile;
   if (t.title === '…') t.title = r.profile.name;
   renderTabs();
-}
+  if (P.tabs.length >= 2) P.tourDone('tab');
+  return t;
+};
 function activate(t) {
-  active = t;
-  for (const x of tabs) x.el.classList.toggle('on', x === t);
+  P.active = t;
+  for (const x of P.tabs) x.el.classList.toggle('on', x === t);
   renderTabs();
-  requestAnimationFrame(() => { fitActive(); t.term.focus(); });
+  requestAnimationFrame(() => { fitActive(); if ($('#settings').hidden) t.term.focus(); });
 }
 function closeTab(t, fromExit) {
   if (!t) return;
   if (!fromExit) api.kill(t.id);
   t.term.dispose(); t.el.remove();
-  const i = tabs.indexOf(t);
-  tabs.splice(i, 1);
-  if (!tabs.length) return api.win('close');
-  if (active === t) activate(tabs[Math.min(i, tabs.length - 1)]); else renderTabs();
+  const i = P.tabs.indexOf(t);
+  P.tabs.splice(i, 1);
+  if (!P.tabs.length) return api.win('close');
+  if (P.active === t) activate(P.tabs[Math.min(i, P.tabs.length - 1)]); else renderTabs();
 }
 function renderTabs() {
-  $('#tabs').innerHTML = tabs.map((t, i) => `<button class="tab${t === active ? ' on' : ''}" data-i="${i}" title="${esc(t.title)}"><span class="dot"></span><span class="t">${esc(t.title)}</span><span class="x" data-x="${i}" aria-label="Zamknij kartę">×</span></button>`).join('');
+  $('#tabs').innerHTML = P.tabs.map((t, i) => `<button class="tab${t === P.active ? ' on' : ''}" data-i="${i}" title="${esc(t.title)}"><span class="dot"></span><span class="t">${esc(t.title)}</span><span class="x" data-x="${i}" aria-label="Zamknij kartę">×</span></button>`).join('');
 }
+P.typeInActive = text => { if (!P.active) return; P.closeSettings?.(); api.write(P.active.id, text); P.active.term.focus(); };
 $('#tabs').addEventListener('mousedown', e => {
   const x = e.target.closest('[data-x]'), b = e.target.closest('.tab');
   if (!b) return;
-  const t = tabs[+(x || b).dataset[x ? 'x' : 'i']];
-  if (x || e.button === 1) { e.preventDefault(); closeTab(t); } else activate(t);
+  const t = P.tabs[+(x || b).dataset[x ? 'x' : 'i']];
+  if (x || e.button === 1) { e.preventDefault(); closeTab(t); } else { P.closeSettings?.(); activate(t); }
 });
-$('#add').addEventListener('click', () => newTab());
+$('#add').addEventListener('click', () => P.newTab());
 $('#addMenu').addEventListener('click', e => { e.stopPropagation(); $('#profiles').hidden = !$('#profiles').hidden; });
-$('#profiles').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { $('#profiles').hidden = true; newTab(b.dataset.id); } });
+$('#profiles').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { $('#profiles').hidden = true; P.newTab(b.dataset.id); } });
 document.addEventListener('click', e => { if (!e.target.closest('.newtab')) $('#profiles').hidden = true; });
 new ResizeObserver(fitActive).observe($('#terms'));
 
@@ -132,120 +140,128 @@ function keys(e, t) {
   if (e.type !== 'keydown') return true;
   const mod = MAC ? e.metaKey : e.ctrlKey, k = e.key.toLowerCase();
   const stop = () => { e.preventDefault(); return false; };
-  if (mod && e.shiftKey && k === 't' || MAC && e.metaKey && k === 't') { newTab(); return stop(); }
-  if (mod && e.shiftKey && k === 'w' || MAC && e.metaKey && k === 'w') { closeTab(t); return stop(); }
-  if (e.ctrlKey && k === 'tab') { const i = tabs.indexOf(t); activate(tabs[(i + (e.shiftKey ? -1 : 1) + tabs.length) % tabs.length]); return stop(); }
-  if (e.altKey && /^[1-9]$/.test(e.key) && tabs[+e.key - 1]) { activate(tabs[+e.key - 1]); return stop(); }
-  if (mod && (e.key === ',')) { togglePanel(); return stop(); }
-  if (mod && (e.key === '=' || e.key === '+')) { setLook({ size: Math.min(28, S.look.size + 1) }, false); return stop(); }
-  if (mod && e.key === '-') { setLook({ size: Math.max(10, S.look.size - 1) }, false); return stop(); }
-  const copy = MAC ? e.metaKey && k === 'c' : e.ctrlKey && (e.shiftKey && k === 'c' || !e.shiftKey && k === 'c' && t.term.hasSelection());
+  if ((mod && e.shiftKey && k === 't') || (MAC && e.metaKey && k === 't')) { P.newTab(); return stop(); }
+  if ((mod && e.shiftKey && k === 'w') || (MAC && e.metaKey && k === 'w')) { closeTab(t); return stop(); }
+  if (e.ctrlKey && k === 'tab') { const i = P.tabs.indexOf(t); activate(P.tabs[(i + (e.shiftKey ? -1 : 1) + P.tabs.length) % P.tabs.length]); return stop(); }
+  if (e.altKey && /^[1-9]$/.test(e.key) && P.tabs[+e.key - 1]) { activate(P.tabs[+e.key - 1]); return stop(); }
+  if (mod && e.key === ',') { P.toggleSettings(); return stop(); }
+  if (mod && (e.key === '=' || e.key === '+')) { P.setLook({ size: Math.min(28, P.S.look.size + 1) }, false); return stop(); }
+  if (mod && e.key === '-') { P.setLook({ size: Math.max(10, P.S.look.size - 1) }, false); return stop(); }
+  const copy = MAC ? e.metaKey && k === 'c' : e.ctrlKey && ((e.shiftKey && k === 'c') || (!e.shiftKey && k === 'c' && t.term.hasSelection()));
   if (copy) { if (t.term.hasSelection()) { api.clipWrite(t.term.getSelection()); t.term.clearSelection(); } return stop(); }
   const paste = MAC ? e.metaKey && k === 'v' : e.ctrlKey && k === 'v';
   if (paste) { api.clipRead().then(s => s && t.term.paste(s)); return stop(); }
   return true;
 }
 document.addEventListener('contextmenu', e => {
-  if (!active || !e.target.closest('.term')) return;
+  if (!P.active || !e.target.closest('.term')) return;
   e.preventDefault();
-  if (active.term.hasSelection()) { api.clipWrite(active.term.getSelection()); active.term.clearSelection(); toast('Skopiowano'); }
-  else api.clipRead().then(s => s && active.term.paste(s));
+  if (P.active.term.hasSelection()) { api.clipWrite(P.active.term.getSelection()); P.active.term.clearSelection(); P.toast('Skopiowano'); }
+  else api.clipRead().then(s => s && P.active.term.paste(s));
 });
 
-// ---------- komendy z terminala (OSC 7777) ----------
-function b64utf8(s) { const bin = atob(s); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))); }
-function handleOsc(data) {
+// ---------- komendy własne ----------
+const RESERVED = ['settings', 'ustawienia', 'tutorial', 'pomoc', 'motyw', 'krycie', 'czcionka', 'dodaj-komende', 'komendy', 'prism'];
+P.upsertCmd = (c, oldName) => {
+  if (!/^[A-Za-z_][A-Za-z0-9_-]{0,40}$/.test(c.name)) throw new Error('Nazwa: litery, cyfry, _ lub -, bez spacji i polskich znaków.');
+  if (RESERVED.includes(c.name)) throw new Error(`„${c.name}” to komenda Prism, wybierz inną nazwę.`);
+  if (!c.body.trim()) throw new Error('Treść nie może być pusta.');
+  P.S.commands = P.S.commands.filter(x => x.name !== c.name && x.name !== oldName);
+  P.S.commands.push({ name: c.name, type: c.type === 'run' ? 'run' : 'text', body: c.body, desc: c.desc || '' });
+  P.S.commands.sort((a, b) => a.name.localeCompare(b.name));
+  P.save(true);
+  P.emit('commands');
+  P.tourDone('command');
+};
+
+// ---------- wiadomości z powłoki ----------
+const b64utf8 = s => new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0)));
+function handleMsg(data) {
   const i = data.indexOf(';'), cmd = i < 0 ? data : data.slice(0, i), arg = i < 0 ? '' : data.slice(i + 1).trim();
-  if (cmd === 'theme') {
-    if (!usePreset(arg)) active?.term.write(`\r\nMotywy: ${PRESETS.map(p => p.id).join(', ')}\r\n`);
-  } else if (cmd === 'opacity') {
-    const v = Math.round(+arg); if (v >= 0 && v <= 100) setLook({ opacity: v }, false); else active?.term.write('\r\nużycie: krycie 0-100\r\n');
+  if (cmd === 'panel') { P.openSettings(arg); P.tourDone('settings'); }
+  else if (cmd === 'tutorial') { P.S.onboarding.hidden = false; P.save(); P.closeSettings(); renderTour(); }
+  else if (cmd === 'theme') { if (!P.usePreset(arg)) P.toast('Kolory terminala: ' + PRESETS.map(p => p.id).join(', ')); }
+  else if (cmd === 'opacity') {
+    const v = Math.round(+arg);
+    if (arg !== '' && v >= 0 && v <= 100) { P.setLook({ opacity: v }, false); P.tourDone('opacity'); } else P.toast('Użycie: krycie 0-100');
   } else if (cmd === 'font') {
-    const v = Math.round(+arg); if (v >= 10 && v <= 28) setLook({ size: v }, false); else active?.term.write('\r\nużycie: czcionka 10-28\r\n');
-  } else if (cmd === 'panel') {
-    openPanel(['look', 'cmd', 'gen'].includes(arg) ? arg : arg === 'komendy' ? 'cmd' : 'look');
+    const v = Math.round(+arg);
+    if (v >= 10 && v <= 28) P.setLook({ size: v }, false); else P.toast('Użycie: czcionka 10-28');
   } else if (cmd === 'add') {
     try {
       const [type, name, ...body] = b64utf8(arg).split('\t');
-      upsertCmd({ name, type, body: body.join('\t'), desc: '' });
-      toast(`Komenda ${name} zapisana`);
-    } catch (err) { toast(err.message || 'Nie udało się dodać komendy'); }
+      P.upsertCmd({ name, type, body: body.join('\t'), desc: '' });
+      P.toast(`Komenda ${name} zapisana`);
+    } catch (err) { P.toast(err.message || 'Nie udało się dodać komendy'); }
   }
 }
+api.onShellMsg(handleMsg);
 
-// ---------- komendy: panel ----------
-const RESERVED = ['motyw', 'krycie', 'czcionka', 'ustawienia', 'dodaj-komende', 'komendy'];
-let editing = null;
-function upsertCmd(c, oldName) {
-  if (!/^[A-Za-z_][A-Za-z0-9_-]{0,40}$/.test(c.name)) throw new Error('Nazwa: litery, cyfry, _ lub -, bez spacji i polskich znaków.');
-  if (RESERVED.includes(c.name)) throw new Error(`„${c.name}” to komenda aplikacji.`);
-  if (!c.body.trim()) throw new Error('Treść nie może być pusta.');
-  S.commands = S.commands.filter(x => x.name !== c.name && x.name !== oldName);
-  S.commands.push({ name: c.name, type: c.type === 'run' ? 'run' : 'text', body: c.body, desc: c.desc || '' });
-  S.commands.sort((a, b) => a.name.localeCompare(b.name));
-  renderCmds();
-  save(true);
+// ---------- samouczek ----------
+const STEPS = [
+  { id: 'settings', title: 'Otwórz ustawienia', text: 'Wpisz komendę i naciśnij Enter. W ustawieniach wszystko obsłużysz myszką.', cmd: 'settings' },
+  { id: 'apply', title: 'Zastosuj motyw w Windows', text: 'Wybierz motyw i kliknij „Zastosuj w Windows”. Do oryginału wrócisz jednym kliknięciem.', act: ['Otwórz motywy', () => P.openSettings('theme')] },
+  { id: 'opacity', title: 'Zmień przezroczystość', text: 'Komendą albo suwakiem w ustawieniach (Terminal).', cmd: 'krycie 60' },
+  { id: 'command', title: 'Dodaj własną komendę', text: 'Potem wpisz: hej Ola', cmd: 'dodaj-komende hej "Cześć {1}!"' },
+  { id: 'tab', title: 'Otwórz nową kartę', text: MAC ? 'Skrót Cmd+T albo przycisk + na górze.' : 'Skrót Ctrl+Shift+T albo przycisk + na górze.', act: ['Nowa karta', () => P.newTab()] }
+];
+P.STEPS = STEPS;
+P.tourActive = () => P.S && !P.S.onboarding.hidden && STEPS.some(s => !P.S.onboarding.done.includes(s.id));
+P.tourNext = () => STEPS.find(s => !P.S.onboarding.done.includes(s.id));
+P.tourDone = id => {
+  const o = P.S?.onboarding;
+  if (!o || o.done.includes(id)) return;
+  o.done.push(id);
+  P.save();
+  renderTour(); P.emit('tour');
+  if (STEPS.every(s => o.done.includes(s.id)) && !o.hidden) {
+    P.toast('Samouczek ukończony. Ściąga: pomoc');
+    setTimeout(() => { o.hidden = true; P.save(); renderTour(); }, 5000);
+  }
+};
+function renderTour() {
+  const o = P.S.onboarding, el = $('#tour');
+  if (o.hidden || !$('#settings').hidden) { el.hidden = true; return; }
+  el.hidden = false;
+  const n = STEPS.filter(s => o.done.includes(s.id)).length, next = P.tourNext();
+  el.innerHTML = `<header><b>Samouczek</b><span>${n} z ${STEPS.length}</span><button class="ic sm" data-t="close" title="Ukryj (wróci komendą tutorial)" aria-label="Ukryj samouczek">✕</button></header>
+    <div class="prog"><i style="width:${n / STEPS.length * 100}%"></i></div>
+    <ol>${STEPS.map((s, i) => {
+      const done = o.done.includes(s.id), cur = s === next;
+      return `<li class="${done ? 'done' : ''}${cur ? ' cur' : ''}"><span class="mk">${done ? '✓' : i + 1}</span><div><b>${esc(s.title)}</b>${cur ? `<p>${esc(s.text)}</p>${s.cmd ? `<button class="chip" data-t="type" data-i="${i}"><code>${esc(s.cmd)}</code><span>Wpisz</span></button>` : ''}${s.act ? `<button class="chip solo" data-t="act" data-i="${i}">${esc(s.act[0])}</button>` : ''}` : ''}</div></li>`;
+    }).join('')}</ol>
+    ${next ? '' : '<p class="fin">Wszystko gotowe! Listę komend pokaże <code>pomoc</code>.</p>'}`;
 }
-function renderCmds() {
-  $('#cmds').innerHTML = S.commands.length ? S.commands.map((c, i) => `<li><b>${esc(c.name)}</b><button data-e="${i}">Edytuj</button><button data-d="${i}">Usuń</button><small>${esc(c.desc || (c.type === 'run' ? '▸ ' : '') + c.body.split('\n')[0])}</small></li>`).join('')
-    : '<li class="empty">Nie masz jeszcze własnych komend.</li>';
-}
-$('#cmds').addEventListener('click', e => {
-  const ed = e.target.closest('[data-e]'), del = e.target.closest('[data-d]');
-  if (del) { const c = S.commands[+del.dataset.d]; S.commands.splice(+del.dataset.d, 1); renderCmds(); save(true); toast(`Usunięto ${c.name}`); if (editing === c.name) resetForm(); }
-  if (ed) { const c = S.commands[+ed.dataset.e]; editing = c.name; $('#cName').value = c.name; $('#cType').value = c.type; $('#cBody').value = c.body; $('#cDesc').value = c.desc || ''; $('#formTitle').textContent = 'Edycja: ' + c.name; $('#cCancel').hidden = false; $('#cName').focus(); }
+P.renderTour = renderTour;
+$('#tour').addEventListener('click', e => {
+  const b = e.target.closest('[data-t]');
+  if (!b) return;
+  const s = STEPS[+b.dataset.i];
+  if (b.dataset.t === 'close') { P.S.onboarding.hidden = true; P.save(); renderTour(); P.toast('Samouczek wrócisz komendą tutorial'); }
+  else if (b.dataset.t === 'type') P.typeInActive(s.cmd);
+  else if (b.dataset.t === 'act') s.act[1]();
 });
-function resetForm() { editing = null; $('#cmdForm').reset(); $('#formTitle').textContent = 'Nowa komenda'; $('#cCancel').hidden = true; $('#cErr').textContent = ''; }
-$('#cCancel').addEventListener('click', resetForm);
-$('#cmdForm').addEventListener('submit', e => {
-  e.preventDefault();
-  try {
-    const name = $('#cName').value.trim();
-    upsertCmd({ name, type: $('#cType').value, body: $('#cBody').value, desc: $('#cDesc').value.trim() }, editing);
-    toast(`Komenda ${name} zapisana`); resetForm();
-  } catch (err) { $('#cErr').textContent = err.message; }
-});
-
-// ---------- panel ----------
-function openPanel(sec) {
-  $('#panel').hidden = false;
-  document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.p === sec));
-  document.querySelectorAll('[data-sec]').forEach(s => s.hidden = s.dataset.sec !== sec);
-}
-function togglePanel() { if ($('#panel').hidden) openPanel('look'); else { $('#panel').hidden = true; active?.term.focus(); } }
-$('#gear').addEventListener('click', togglePanel);
-$('#closePanel').addEventListener('click', togglePanel);
-$('#seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) openPanel(b.dataset.p); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#panel').hidden) togglePanel(); });
-
-$('#presets').innerHTML = PRESETS.map(p => `<button class="pre" data-id="${p.id}" style="background:${p.bg};color:${p.fg}"><span style="color:${p.accent}">❯</span> ${p.n}</button>`).join('');
-$('#presets').addEventListener('click', e => { const b = e.target.closest('.pre'); if (b) usePreset(b.dataset.id); });
-for (const k of ['opacity', 'size', 'lineHeight', 'padding', 'radius']) $('#' + k).addEventListener('input', e => setLook({ [k]: +e.target.value }, false));
-for (const k of ['bg', 'fg', 'accent', 'ansi']) $('#' + k).addEventListener('input', e => setLook({ [k]: e.target.value }));
-$('#cursor').addEventListener('change', e => setLook({ cursor: e.target.value }, false));
-$('#blink').addEventListener('change', e => setLook({ blink: e.target.value === '1' }, false));
-$('#font').addEventListener('change', e => setLook({ font: e.target.value.trim() || 'monospace' }, false));
-$('#defProfile').addEventListener('change', e => { S.defaultProfile = e.target.value; save(true); });
-$('#desktopBlur').addEventListener('change', e => { S.desktopBlur = e.target.checked; save(true); $('#relaunch').hidden = false; });
-$('#relaunch').addEventListener('click', () => api.win('relaunch'));
 
 // ---------- okno ----------
 $('#wc').addEventListener('click', e => { const b = e.target.closest('[data-w]'); if (b) api.win(b.dataset.w); });
 $('.drag').addEventListener('dblclick', () => api.win('max'));
+$('#gear').addEventListener('click', () => P.toggleSettings());
 api.onWinState(m => document.body.classList.toggle('maxed', m));
+api.onAppCommand(c => { if (c === 'settings') P.openSettings(); else P.newTab(); });
+api.onSettingsChanged(s => { P.S = s; P.applyLook(); P.emit('commands'); P.emit('settings'); renderTour(); });
 
 // ---------- start ----------
-api.onData(({ id, data }) => tabs.find(t => t.id === id)?.term.write(data));
-api.onExit(({ id }) => closeTab(tabs.find(t => t.id === id), true));
+api.onData(({ id, data }) => P.tabs.find(t => t.id === id)?.term.write(data));
+api.onExit(({ id }) => closeTab(P.tabs.find(t => t.id === id), true));
 
-api.getSettings().then(r => {
-  S = r.settings; PROFILES = r.profiles; ACRYLIC = r.acrylicCapable;
-  $('#profiles').innerHTML = PROFILES.map((p, i) => `<button data-id="${esc(p.id)}">${esc(p.name)}${i < 9 ? '' : ''}<small>${p.kind === 'other' ? 'bez własnych komend' : p.kind}</small></button>`).join('');
-  $('#defProfile').innerHTML = PROFILES.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
-  $('#defProfile').value = S.defaultProfile || PROFILES[0].id;
-  $('#desktopBlur').checked = S.desktopBlur;
-  if (!ACRYLIC) $('#blurHint').textContent = 'Twój system tego nie obsługuje (działa na Windows 11 i macOS). Sama przezroczystość działa wszędzie.';
-  $('#keys').innerHTML = KEYS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
-  applyLook(); renderCmds(); newTab();
+api.getSettings().then(async r => {
+  P.S = r.settings; P.profiles = r.profiles; P.acrylic = r.acrylicCapable;
+  $('#profiles').innerHTML = P.profiles.map(p => `<button data-id="${esc(p.id)}">${esc(p.name)}<small>${p.kind === 'other' ? 'bez komend Prism' : esc(p.kind)}</small></button>`).join('');
+  P.applyLook();
+  const first = !P.S.onboarding.welcomed;
+  await P.newTab(undefined, { welcome: first });
+  if (first) { P.S.onboarding.welcomed = true; P.save(); }
+  renderTour();
+  if (r.startup.openSettings) P.openSettings();
 });
 }

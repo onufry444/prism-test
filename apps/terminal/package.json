@@ -1,13 +1,16 @@
 {
-  "name": "szklo-terminal",
-  "productName": "Szkło Terminal",
-  "version": "0.1.0",
-  "description": "Terminal z przezroczystym wyglądem i własnymi komendami",
+  "name": "prism",
+  "productName": "Prism",
+  "version": "0.2.0",
+  "description": "Terminal i centrum sterowania wyglądem Windowsa",
   "main": "src/main.js",
+  "author": "onufry444",
+  "license": "MIT",
+  "homepage": "https://github.com/onufry444/prism",
   "scripts": {
     "start": "electron .",
     "test": "node test/commands.test.js",
-    "dist": "electron-builder"
+    "dist": "electron-builder --win zip --x64 --publish never"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
@@ -20,10 +23,19 @@
     "electron-builder": "^26.0.0"
   },
   "build": {
-    "appId": "pl.szklo.terminal",
-    "files": ["src/**", "node_modules/**", "package.json"],
+    "appId": "io.github.onufry444.prism",
+    "productName": "Prism",
+    "directories": { "output": "dist" },
+    "files": ["src/**", "package.json"],
     "asarUnpack": ["node_modules/@lydell/**"],
-    "win": { "target": "nsis" },
+    "extraFiles": [
+      { "from": "../../installer", "to": "engine/installer" },
+      { "from": "../../themes", "to": "engine/themes" }
+    ],
+    "win": {
+      "target": [{ "target": "zip", "arch": ["x64"] }],
+      "artifactName": "Prism-win-x64.${ext}"
+    },
     "mac": { "target": "dmg" },
     "linux": { "target": "AppImage" }
   }

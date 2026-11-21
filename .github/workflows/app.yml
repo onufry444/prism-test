@@ -1,0 +1,83 @@
+name: Aplikacja
+
+# Buduje Prism na Windows, uruchamia test dymny (okno, ustawienia, PowerShell, cmd, Git Bash)
+# i sprawdza instalację jedną komendą. Po wypchnięciu tagu v* publikuje wydanie na GitHubie.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: apps/terminal
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Wersja z tagu
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version ($env:GITHUB_REF_NAME.TrimStart('v')) --no-git-tag-version --allow-same-version
+
+      - name: Zależności
+        run: npm install --no-audit --no-fund
+
+      - name: Budowanie
+        run: npx electron-builder --win zip --x64 --publish never
+
+      - name: Test dymny aplikacji
+        run: |
+          $exe = Get-ChildItem dist -Recurse -Filter Prism.exe | Select-Object -First 1
+          $out = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '--smoke', "`"$out`"" -PassThru -Wait
+          if (Test-Path $out) {
+            $r = Get-Content $out -Raw | ConvertFrom-Json
+            foreach ($c in $r.checks) {
+              if ($c.ok) { Write-Host "OK    $($c.name)" } else { Write-Host "BŁĄD  $($c.name)"; Write-Host ($c.info | ConvertTo-Json -Depth 5) }
+            }
+          } else { Write-Host 'Brak pliku z wynikiem testu' }
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: Test instalacji jedną komendą (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PRISM_ZIP = (Resolve-Path dist\Prism-win-x64.zip).Path
+          $env:PRISM_NO_LAUNCH = '1'
+          Get-Content ..\..\install.ps1 -Raw -Encoding UTF8 | Invoke-Expression
+          $root = Join-Path $env:LOCALAPPDATA 'Prism'
+          foreach ($f in 'app\Prism.exe', 'app\engine\installer\prism.ps1', 'app\engine\themes\kafel.json', 'bin\prism.cmd') {
+            if (-not (Test-Path (Join-Path $root $f))) { throw "Brak po instalacji: $f" }
+          }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -notlike "*$root\bin*") { throw 'bin nie trafił do PATH' }
+          $list = & "$root\bin\prism.cmd" list | Out-String
+          Write-Host $list
+          if ($list -notmatch 'kafel') { throw 'prism list nie pokazuje motywów' }
+          & "$root\bin\prism.cmd" apply kafel -DryRun -OutDir "$env:RUNNER_TEMP\dry"
+          if (-not (Test-Path "$env:RUNNER_TEMP\dry\glazewm.yaml")) { throw 'prism apply -DryRun nie wygenerował plików' }
+          & "$root\bin\prism.cmd" uninstall -Force
+          if (Test-Path "$root\app") { throw 'uninstall nie usunął aplikacji' }
+          Write-Host 'Instalacja, komenda prism i dezinstalacja działają.'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Prism-win-x64
+          path: apps/terminal/dist/Prism-win-x64.zip
+
+      - name: Wydanie na GitHubie
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME dist/Prism-win-x64.zip --title "Prism $env:GITHUB_REF_NAME" --notes-file ../../.github/release-notes.md
