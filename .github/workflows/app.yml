@@ -58,18 +58,18 @@ jobs:
           Get-Content ..\..\install.ps1 -Raw -Encoding UTF8 | Invoke-Expression
           $root = Join-Path $env:LOCALAPPDATA 'Prism'
           foreach ($f in 'app\Prism.exe', 'app\engine\installer\prism.ps1', 'app\engine\themes\kafel.json', 'bin\prism.cmd') {
-            if (-not (Test-Path (Join-Path $root $f))) { throw "Brak po instalacji: $f" }
+            if (-not (Test-Path (Join-Path $root $f))) { throw "Missing after install: $f" }
           }
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          if ($userPath -notlike "*$root\bin*") { throw 'bin nie trafił do PATH' }
+          if ($userPath -notlike "*$root\bin*") { throw 'bin not added to PATH' }
           $list = & "$root\bin\prism.cmd" list | Out-String
           Write-Host $list
-          if ($list -notmatch 'kafel') { throw 'prism list nie pokazuje motywów' }
+          if ($list -notmatch 'kafel') { throw 'prism list shows no themes' }
           & "$root\bin\prism.cmd" apply kafel -DryRun -OutDir "$env:RUNNER_TEMP\dry"
-          if (-not (Test-Path "$env:RUNNER_TEMP\dry\glazewm.yaml")) { throw 'prism apply -DryRun nie wygenerował plików' }
+          if (-not (Test-Path "$env:RUNNER_TEMP\dry\glazewm.yaml")) { throw 'prism apply -DryRun produced no files' }
           & "$root\bin\prism.cmd" uninstall -Force
-          if (Test-Path "$root\app") { throw 'uninstall nie usunął aplikacji' }
-          Write-Host 'Instalacja, komenda prism i dezinstalacja działają.'
+          if (Test-Path "$root\app") { throw 'uninstall did not remove the app' }
+          Write-Host 'Install, prism command and uninstall OK.'
 
       - uses: actions/upload-artifact@v4
         with:

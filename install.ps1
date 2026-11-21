@@ -23,9 +23,9 @@
     Write-Host ''
     Write-Host '  Prism' -ForegroundColor Magenta -NoNewline; Write-Host '  terminal i wygląd Windowsa w jednym' -ForegroundColor DarkGray
     Write-Host ''
-    if ($env:OS -ne 'Windows_NT') { throw 'Prism działa tylko w Windows.' }
+    if ($env:OS -ne 'Windows_NT') { throw "Prism działa tylko w Windows." }
     if (-not [Environment]::Is64BitOperatingSystem) { throw 'Prism wymaga 64-bitowego Windows.' }
-    if ([Environment]::OSVersion.Version.Build -lt 22000) { Say 'Uwaga: motywy systemu wymagają Windows 11. Sam terminal zadziała.' 'Yellow' }
+    if ([Environment]::OSVersion.Version.Build -lt 22000) { Say "Uwaga: motywy systemu wymagają Windows 11. Sam terminal zadziała." 'Yellow' }
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('prism-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -42,7 +42,7 @@
       if (-not $exe) { throw 'W pobranej paczce nie ma Prism.exe.' }
 
       $running = @(Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase) })
-      if ($running.Count) { Say 'Zamykam działający Prism...' 'Cyan'; $running | Stop-Process -Force; Start-Sleep -Milliseconds 900 }
+      if ($running.Count) { Say "Zamykam działający Prism..." 'Cyan'; $running | Stop-Process -Force; Start-Sleep -Milliseconds 900 }
       New-Item -ItemType Directory -Path $root -Force | Out-Null
       if (Test-Path -LiteralPath $appDir) { Remove-Item -LiteralPath $appDir -Recurse -Force }
       Copy-Item -LiteralPath $exe.DirectoryName -Destination $appDir -Recurse
