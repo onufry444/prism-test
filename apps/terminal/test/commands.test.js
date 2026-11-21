@@ -35,8 +35,11 @@ assert.strictEqual(Buffer.from(add.slice(4), 'base64').toString('utf8'), 'run\tn
 
 const ps = fs.readFileSync(path.join(dir, 'commands.ps1'), 'utf8');
 assert.match(ps, /function global:hej \{\r\n  Write-Output "Cześć \$\(\$args\[0\]\)! `"cytat`" `\$HOME ``x`` \\n \$\(\$args -join ' '\)"/);
-const dos = fs.readFileSync(path.join(dir, 'macros.doskey'), 'utf8');
-assert.match(dos, /^settings=@echo panel;\$1\$G"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%\.msg"\r$/m);
-assert.match(dos, /^dwa=@echo pierwszy \$1 \$T @echo drugi\r$/m);
-assert.match(dos, /^hej=@echo Cześć \$1!/m);
+const bat = fs.readFileSync(path.join(dir, 'init.cmd'), 'utf8');
+console.log(bat.split('\r\n').slice(0, 4).join('\n'));
+assert.ok(bat.startsWith('@chcp 65001 >nul\r\n'));
+// hej: tekst z cudzysłowami, $, backtickiem i argumentami, wszystko zabezpieczone przed cmd
+assert.ok(bat.includes('@doskey hej=@echo(Cześć $1! ^^^"cytat^^^" $$HOME `x` \\n $*\r\n'), 'makro hej');
+assert.ok(bat.includes('@doskey dwa=@echo pierwszy $1 ^& echo drugi\r\n'), 'makro dwa');
+assert.ok(bat.includes('@doskey settings=@echo(panel;$1^>^"%%PRISM_INBOX%%\\cmd-%%RANDOM%%%%RANDOM%%.msg^"\r\n'), 'makro settings');
 console.log('OK: wszystkie testy generatora komend przeszły');

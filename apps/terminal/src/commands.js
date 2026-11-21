@@ -180,19 +180,30 @@ function global:prompt { __tc_reload; & $global:__TC_PROMPT }
 }
 
 // ---------- cmd (doskey) ----------
-const dk = b => b.replace(/[$<>|]/g, ch => ({ '$': '$$', '<': '$L', '>': '$G', '|': '$B' }[ch])).replace(PH, (m, k) =>
+// Makra definiuje skrypt init.cmd uruchamiany przez `cmd /K`. Pierwsza linia przełącza konsolę na UTF-8,
+// więc kolejne linie (i polskie znaki w makrach) cmd czyta poprawnie. Plik makr doskey /macrofile
+// czytany jest zawsze w starej stronie kodowej, dlatego go nie używamy.
+// Każde makro to jedna linia z `&` (z `$T` cmd wypisywałby prompt przed każdą częścią).
+const cmdSpecial = /[\^&|<>"]/g;
+const doskeyDollar = t => t.replace(/\$/g, '$$$$');
+const cmdPH = (t, quoteArgs) => t.replace(PH, (m, k) =>
   k === 'args' ? '$*' : k === 'date' ? '%DATE%' : k === 'time' ? '%TIME:~0,5%' : k === 'user' ? '%USERNAME%' : (+k <= 9 ? '$' + k : ''));
-// '@' wycisza echo samej komendy, inaczej cmd pokazywałby prompt przed każdą linią
-const echoLines = text => text.split('\n').map(l => l.trim() ? '@echo ' + dk(l) : '@echo.').join(' $T ');
+// tekst do wypisania: znaki specjalne cmd poprzedzone ^, `echo(` działa też dla pustej linii i słów "on"/"off"
+const echoLines = text => '@' + text.split('\n').map(l => 'echo(' + cmdPH(doskeyDollar(l).replace(cmdSpecial, '^$&'))).join('& ');
+const runLine = body => '@' + body.split(/\s*[;\n]\s*/).filter(Boolean).map(x => cmdPH(doskeyDollar(x))).join(' & ');
+// zapis definicji w pliku .cmd: % podwojone, znaki specjalne poprzedzone ^, żeby doskey dostał makro bez zmian
+const batchDef = (name, macro) => `@doskey ${name}=` + macro.replace(/%/g, '%%').replace(cmdSpecial, '^$&');
 
-function doskey(cmds) {
-  const L = cmds.map(c => c.name + '=' + (c.type === 'text' ? echoLines(c.body) : dk(c.body.trim()).split(/\s*[;\n]\s*/).filter(Boolean).map(x => '@' + x).join(' $T ')));
-  const msg = m => `@echo ${m}$G"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%.msg"`;
-  L.push('settings=' + msg('panel;$1'), 'ustawienia=' + msg('panel;$1'), 'tutorial=' + msg('tutorial;'));
-  L.push('krycie=' + msg('opacity;$1'), 'czcionka=' + msg('font;$1'), 'motyw=' + msg('theme;$1'));
-  const help = listing(cmds, false) + '\n\nKomendy Prism: settings, krycie 0-100, czcionka 10-28, motyw NAZWA, tutorial\n(dodawanie komend z terminala działa w PowerShell)';
-  L.push('komendy=' + echoLines(help), 'pomoc=' + echoLines(help));
-  return L.join('\r\n') + '\r\n';
+function cmdInit(cmds) {
+  const msg = m => `@echo(${m}>"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%.msg"`;
+  const help = listing(cmds, false) + '\n\nKomendy Prism: settings, krycie 0-100, czcionka 10-28, motyw NAZWA, tutorial\n(dodawanie komend z terminala działa w PowerShell i bash)';
+  const defs = [
+    ...cmds.map(c => [c.name, c.type === 'text' ? echoLines(c.body) : runLine(c.body)]),
+    ['settings', msg('panel;$1')], ['ustawienia', msg('panel;$1')], ['tutorial', msg('tutorial;')],
+    ['krycie', msg('opacity;$1')], ['czcionka', msg('font;$1')], ['motyw', msg('theme;$1')],
+    ['komendy', echoLines(help)], ['pomoc', echoLines(help)]
+  ];
+  return ['@chcp 65001 >nul', ...defs.map(([n, m]) => batchDef(n, m))].join('\r\n') + '\r\n';
 }
 
 // ---------- zapis ----------
@@ -207,7 +218,7 @@ function writeAll(dir, list, platform = process.platform) {
     'init.bash': bashInit(shDir),
     'commands.ps1': BOM + powershell(cmds),
     'init.ps1': BOM + psInit(dir),
-    'macros.doskey': doskey(cmds)
+    'init.cmd': cmdInit(cmds)
   };
   for (const [f, s] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), s);
   for (const [f, s] of Object.entries(zshFiles(shDir))) fs.writeFileSync(path.join(dir, 'zsh', f), s);
@@ -215,4 +226,4 @@ function writeAll(dir, list, platform = process.platform) {
   return cmds;
 }
 
-module.exports = { writeAll, clean, validName, RESERVED: [...RESERVED], _gen: { posix, powershell, doskey } };
+module.exports = { writeAll, clean, validName, RESERVED: [...RESERVED], _gen: { posix, powershell, cmdInit } };
