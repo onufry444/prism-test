@@ -59,8 +59,9 @@
       'if "%~1"=="" (start "" "%PRISM_APP%\Prism.exe" & exit /b 0)',
       'if /i "%~1"=="settings" (start "" "%PRISM_APP%\Prism.exe" --settings & exit /b 0)',
       'if /i "%~1"=="ustawienia" (start "" "%PRISM_APP%\Prism.exe" --settings & exit /b 0)',
-      # `& exit /b` w tej samej linii: po `prism uninstall` tego pliku już nie ma, więc cmd nie może czytać dalej
-      'powershell -NoProfile -ExecutionPolicy Bypass -File "%PRISM_APP%\engine\installer\prism.ps1" %* & exit /b'
+      # `(goto) 2>nul` kończy skrypt .cmd, zanim ruszy PowerShell (reszta linii jest już wczytana).
+      # Dzięki temu `prism uninstall` może usunąć ten plik i cmd nie zgłosi błędu.
+      '(goto) 2>nul & powershell -NoProfile -ExecutionPolicy Bypass -File "%PRISM_APP%\engine\installer\prism.ps1" %*'
     ) -join "`r`n"
     [IO.File]::WriteAllText((Join-Path $binDir 'prism.cmd'), $cmd + "`r`n", (New-Object System.Text.ASCIIEncoding))
 
