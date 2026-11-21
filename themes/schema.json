@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/onufry444/prism/themes/schema.json",
+  "title": "Motyw Prism",
+  "description": "Jeden plik opisujący wygląd całego systemu. Kolory w polach typu 'kolor' to #RRGGBB albo nazwa koloru z sekcji colors (np. \"accent\").",
+  "type": "object",
+  "required": ["id", "name", "colors"],
+  "definitions": {
+    "hex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+    "colorRef": {
+      "description": "#RRGGBB albo nazwa koloru z sekcji colors",
+      "type": "string",
+      "pattern": "^(#[0-9a-fA-F]{6}|[a-zA-Z][a-zA-Z0-9]*)$"
+    }
+  },
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,40}$", "description": "Taki sam jak nazwa pliku bez .json" },
+    "name": { "type": "string", "minLength": 1 },
+    "author": { "type": "string" },
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "colors": {
+      "type": "object",
+      "required": ["mode", "background", "text", "accent"],
+      "properties": {
+        "mode": { "enum": ["dark", "light"], "description": "Tryb Windowsa i aplikacji" },
+        "background": { "$ref": "#/definitions/hex" },
+        "surface": { "$ref": "#/definitions/hex" },
+        "text": { "$ref": "#/definitions/hex" },
+        "muted": { "$ref": "#/definitions/hex" },
+        "accent": { "$ref": "#/definitions/hex", "description": "Kolor akcentu Windowsa, ramki aktywnego okna, kursor terminala" },
+        "accent2": { "$ref": "#/definitions/hex" }
+      },
+      "additionalProperties": { "$ref": "#/definitions/hex" }
+    },
+    "effects": {
+      "type": "object",
+      "properties": {
+        "transparency": { "type": "boolean", "description": "Efekty przezroczystości Windowsa" },
+        "opacity": { "type": "integer", "minimum": 0, "maximum": 100, "description": "Krycie tła terminala i (w przyszłości) paska" },
+        "blur": { "type": "boolean", "description": "Rozmycie za oknami Prism (terminal, pasek)" },
+        "radius": { "type": "integer", "minimum": 0, "maximum": 32 }
+      },
+      "additionalProperties": false
+    },
+    "fonts": {
+      "type": "object",
+      "properties": {
+        "ui": { "type": "string" },
+        "mono": { "type": "string" },
+        "size": { "type": "integer", "minimum": 9, "maximum": 28 }
+      },
+      "additionalProperties": false
+    },
+    "wallpaper": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["gradient", "image", "none"] },
+        "colors": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "$ref": "#/definitions/colorRef" } },
+        "angle": { "type": "number", "minimum": 0, "maximum": 360 },
+        "path": { "type": "string", "description": "Dla type=image: ścieżka względem pliku motywu" }
+      },
+      "additionalProperties": false
+    },
+    "taskbar": {
+      "type": "object",
+      "properties": {
+        "alignment": { "enum": ["left", "center"] },
+        "windhawk": {
+          "type": "object",
+          "description": "Gotowe motywy modów Windhawk. Etap 1 podaje je jako instrukcję, etap 4 ustawi je sam.",
+          "properties": {
+            "taskbarStyler": { "type": "string" },
+            "startMenuStyler": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "windows": {
+      "type": "object",
+      "properties": {
+        "tiling": { "type": "boolean", "description": "true = instaluje i uruchamia GlazeWM" },
+        "gaps": {
+          "type": "object",
+          "properties": { "inner": { "type": "integer", "minimum": 0, "maximum": 80 }, "outer": { "type": "integer", "minimum": 0, "maximum": 120 } },
+          "additionalProperties": false
+        },
+        "border": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "focused": { "$ref": "#/definitions/colorRef" },
+            "inactive": { "$ref": "#/definitions/colorRef" }
+          },
+          "additionalProperties": false
+        },
+        "corners": { "enum": ["rounded", "small_rounded", "square"] },
+        "hideTitleBar": { "type": "boolean" },
+        "inactiveOpacity": { "type": "integer", "minimum": 30, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "terminal": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ansi": { "enum": ["dark", "light"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,84 @@
+/* Kolory okna biorą się z ustawień terminala (zmienne ustawia renderer.js) */
+:root { --tbg: rgba(16,18,22,.78); --fg: #e7e5df; --ac: #7ee0b5; --solid: #101216; --pad: 14px; --rad: 12px; }
+* { box-sizing: border-box; min-width: 0; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+body { font: 13px/1.45 system-ui, "Segoe UI", -apple-system, sans-serif; color: var(--fg); }
+#app { position: relative; height: 100vh; display: flex; flex-direction: column; background: var(--tbg); border-radius: var(--rad); overflow: hidden; border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent); }
+body.maxed #app { border-radius: 0; border: 0; }
+
+.bar { display: flex; align-items: center; gap: 4px; height: 40px; padding: 0 0 0 8px; -webkit-app-region: drag; user-select: none; background: color-mix(in srgb, black 18%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent); }
+.bar button, .menu { -webkit-app-region: no-drag; }
+.tabs { display: flex; gap: 3px; overflow-x: auto; scrollbar-width: none; flex: 0 1 auto; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { -webkit-app-region: no-drag; flex: none; display: flex; align-items: center; gap: 8px; max-width: 220px; height: 30px; padding: 0 8px 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); opacity: .62; font: inherit; cursor: default; }
+.tab:hover { opacity: .85; background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.tab.on { opacity: 1; background: color-mix(in srgb, var(--fg) 11%, transparent); }
+.tab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac); flex: none; }
+.tab .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab .x { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; opacity: .5; font-size: 14px; }
+.tab .x:hover { opacity: 1; background: color-mix(in srgb, var(--fg) 14%, transparent); }
+.drag { flex: 1; align-self: stretch; }
+.ic { width: 32px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); font-size: 18px; display: grid; place-items: center; opacity: .75; }
+.ic:hover { opacity: 1; background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.ic.small { width: 20px; font-size: 13px; margin-left: -4px; }
+.newtab { position: relative; display: flex; }
+.menu { position: absolute; top: 34px; left: 0; z-index: 20; min-width: 200px; padding: 5px; border-radius: 10px; background: var(--solid); border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+.menu button { display: flex; justify-content: space-between; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; text-align: left; }
+.menu button:hover { background: color-mix(in srgb, var(--ac) 22%, transparent); }
+.menu small { opacity: .5; }
+.wc { display: flex; height: 100%; }
+.wc button { width: 46px; height: 100%; border: 0; background: transparent; color: var(--fg); display: grid; place-items: center; opacity: .8; }
+.wc button:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); opacity: 1; }
+.wc .x:hover { background: #e81123; color: #fff; }
+
+#terms { position: relative; flex: 1; }
+.term { position: absolute; inset: 0; padding: var(--pad); visibility: hidden; }
+.term.on { visibility: visible; }
+.term .xterm, .term .xterm-viewport, .term .xterm-screen { background: transparent !important; }
+.xterm-viewport::-webkit-scrollbar { width: 10px; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg) 20%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+
+#panel { position: absolute; top: 40px; right: 0; bottom: 0; width: min(360px, 92vw); z-index: 10; overflow-y: auto; padding: 14px 18px 30px; background: color-mix(in srgb, var(--solid) 94%, transparent); backdrop-filter: blur(20px); border-left: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); box-shadow: -16px 0 40px rgba(0,0,0,.25); animation: slide .18s ease-out; }
+@keyframes slide { from { transform: translateX(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #panel { animation: none; } }
+.phead { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.seg { flex: 1; display: flex; padding: 3px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); }
+.seg button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--fg); font: 600 13px system-ui, sans-serif; opacity: .7; }
+.seg button.on { background: var(--fg); color: var(--solid); opacity: 1; }
+h3 { font-size: 14px; margin: 18px 0 10px; }
+.f { display: grid; gap: 6px; margin-bottom: 14px; }
+.f label { font-weight: 600; display: flex; justify-content: space-between; }
+.f label span { opacity: .6; font-weight: 400; font-variant-numeric: tabular-nums; }
+.check label { justify-content: flex-start; gap: 8px; align-items: center; }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.cols.two { grid-template-columns: repeat(2, minmax(0,1fr)); }
+input, select, textarea { font: inherit; color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 8px; padding: 8px 10px; min-height: 36px; width: 100%; }
+select option { background: var(--solid); color: var(--fg); }
+input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--ac); min-height: 24px; }
+input[type=color] { height: 38px; padding: 3px; }
+input[type=checkbox] { width: 16px; min-height: 16px; accent-color: var(--ac); }
+textarea { font-family: var(--mono, monospace); min-height: 84px; resize: vertical; }
+:focus-visible { outline: 2px solid var(--ac); outline-offset: 1px; }
+.hint { margin: 0; font-size: 12px; opacity: .6; }
+.hint.top { margin-bottom: 12px; }
+code { font-family: var(--mono, monospace); font-size: 12px; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.presets { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 7px; margin-bottom: 18px; }
+.pre { height: 46px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); font: 600 12px var(--mono, monospace); text-align: left; padding: 0 10px; }
+.pre.on { outline: 2px solid var(--ac); outline-offset: 1px; }
+.btn { height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--ac); color: var(--solid); font: 600 13px system-ui, sans-serif; }
+.btn.ghost { background: transparent; color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); }
+.row { display: flex; gap: 8px; }
+.err { color: #ff7b72; margin: 0 0 8px; min-height: 0; }
+.err:empty { display: none; }
+.cmds { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 6px; }
+.cmds li { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 2px 4px; padding: 8px 6px 8px 12px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); }
+.cmds b { font: 600 13px var(--mono, monospace); color: var(--ac); }
+.cmds small { grid-column: 1; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmds button { grid-row: 1 / 3; border: 0; background: transparent; color: var(--fg); opacity: .6; padding: 6px 8px; border-radius: 6px; font: inherit; }
+.cmds button:hover { opacity: 1; background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.cmds .empty { display: block; opacity: .6; }
+.keys { width: 100%; border-collapse: collapse; }
+.keys td { padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent); }
+.keys td:last-child { text-align: right; font-family: var(--mono, monospace); opacity: .75; white-space: nowrap; }
+#toast { position: absolute; left: 50%; bottom: 18px; transform: translate(-50%, 10px); padding: 8px 14px; border-radius: 9px; background: var(--fg); color: var(--solid); font-weight: 600; opacity: 0; pointer-events: none; transition: .2s; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }

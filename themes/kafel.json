@@ -1,0 +1,30 @@
+{
+  "$schema": "./schema.json",
+  "id": "kafel",
+  "name": "Kafel",
+  "author": "Prism",
+  "version": "1.0.0",
+  "description": "Kafelkowe okna sterowane klawiaturą, cienkie fioletowe ramki, odstępy między oknami i ciemna, chłodna tapeta.",
+  "colors": {
+    "mode": "dark",
+    "background": "#0f1117",
+    "surface": "#1a1d27",
+    "text": "#e4e6f0",
+    "muted": "#7d8197",
+    "accent": "#c792ff",
+    "accent2": "#5ee6c8"
+  },
+  "effects": { "transparency": true, "opacity": 86, "blur": false, "radius": 8 },
+  "fonts": { "ui": "Segoe UI Variable", "mono": "Cascadia Code", "size": 14 },
+  "wallpaper": { "type": "gradient", "angle": 45, "colors": ["#0f1117", "#2a1745", "#0f3b45"] },
+  "taskbar": { "alignment": "left", "windhawk": { "taskbarStyler": "SimplyTransparent" } },
+  "windows": {
+    "tiling": true,
+    "gaps": { "inner": 10, "outer": 12 },
+    "border": { "enabled": true, "focused": "accent", "inactive": "surface" },
+    "corners": "small_rounded",
+    "hideTitleBar": false,
+    "inactiveOpacity": 94
+  },
+  "terminal": { "enabled": true, "ansi": "dark" }
+}

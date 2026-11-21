@@ -1,0 +1,30 @@
+{
+  "name": "szklo-terminal",
+  "productName": "Szkło Terminal",
+  "version": "0.1.0",
+  "description": "Terminal z przezroczystym wyglądem i własnymi komendami",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/commands.test.js",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.1.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "pl.szklo.terminal",
+    "files": ["src/**", "node_modules/**", "package.json"],
+    "asarUnpack": ["node_modules/@lydell/**"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}
