@@ -73,7 +73,7 @@ apps/terminal/          aplikacja (Electron + xterm.js + node-pty): terminal, us
 
 Uruchomienie z kodu: `cd apps/terminal`, potem `npm install` i `npm start`. Silnik bez aplikacji uruchomisz z folderu głównego: `prism apply kafel -DryRun`.
 
-Każdy push sprawdzają testy na prawdziwym Windowsie: składnia, motywy, próbne zastosowanie, budowanie aplikacji i test dymny. Test dymny otwiera okno i ustawienia, w PowerShell, cmd i Git Bash uruchamia komendy, a na końcu sprawdza instalację i dezinstalację. Nowe wydanie powstaje po wypchnięciu tagu, np. `git tag v0.3.0 && git push --tags`.
+Każdy push sprawdzają testy na prawdziwym Windowsie: składnia, motywy, próbne zastosowanie, budowanie aplikacji i test dymny. Test dymny otwiera okno i ustawienia, w PowerShell, cmd i Git Bash uruchamia komendy, a na końcu sprawdza instalację i dezinstalację. Nowe wydanie powstaje samo, gdy podniesiesz wersję w `apps/terminal/package.json` i wyślesz zmianę na `main`.
 
 ## Plan
 
