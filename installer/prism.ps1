@@ -99,7 +99,7 @@ function Invoke-Restore {
 # ---------------------------------------------------------------- commands
 function Show-Version {
   $exe = Join-Path $AppDir 'Prism.exe'
-  if (Test-Path -LiteralPath $exe) { Write-Host "Prism $((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion)" } else { Write-Host 'Prism is not installed in this user profile.' }
+  if (Test-Path -LiteralPath $exe) { Write-Host "Prism $(((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion) -replace '^(\d+\.\d+\.\d+)\.0$', '$1')" } else { Write-Host 'Prism is not installed in this user profile.' }
 }
 function Invoke-Update {
   Write-Step 'Opening the updater in a new window (Prism will close for a moment)'
@@ -138,7 +138,9 @@ function Invoke-Uninstall {
     }
     Write-Step 'Prism will close now; the uninstall finishes in a new window.'
     $env:TERM_PROGRAM = $null
-    Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", 'uninstall', '-Force', '-Detached', $(if ($Purge) { '-Purge' })
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", 'uninstall', '-Force', '-Detached')
+    if ($Purge) { $a += '-Purge' }
+    Start-Process -FilePath 'powershell.exe' -ArgumentList $a
     return
   }
   if (-not $Force) {
