@@ -190,6 +190,18 @@ $('#wc').addEventListener('click', e => { const b = e.target.closest('[data-w]')
 $('.drag').addEventListener('dblclick', () => api.win('max'));
 $('#gear').addEventListener('click', () => P.toggleSettings());
 api.onWinState(m => document.body.classList.toggle('maxed', m));
+// resizing from the edges: the pointer stays captured, so dragging outside the window keeps working
+document.querySelectorAll('.rz i').forEach(h => h.addEventListener('pointerdown', async e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  h.setPointerCapture(e.pointerId);
+  const edge = h.dataset.e, x0 = e.screenX, y0 = e.screenY;
+  await api.resizeStart();
+  let raf = 0, last = null;
+  const move = ev => { last = ev; if (!raf) raf = requestAnimationFrame(() => { raf = 0; api.resizeTo(edge, last.screenX - x0, last.screenY - y0); }); };
+  const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('lostpointercapture', up); if (last) api.resizeTo(edge, last.screenX - x0, last.screenY - y0); };
+  h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('lostpointercapture', up);
+}));
 api.onData(({ id, data }) => P.tabs.find(t => t.id === id)?.term.write(data));
 api.onExit(({ id }) => closeTab(P.tabs.find(t => t.id === id), true));
 api.onOpenTab(req => P.newTab(null, req.cwd || null, req));

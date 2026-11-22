@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('api', {
   menu: () => ipcRenderer.send('app:menu'),
   pathForFile: f => { try { return webUtils.getPathForFile(f); } catch { return ''; } },
   win: a => ipcRenderer.send('win', a),
+  resizeStart: () => ipcRenderer.invoke('win:resize-start'),
+  resizeTo: (edge, dx, dy) => ipcRenderer.send('win:resize', edge, dx, dy),
   clipRead: () => ipcRenderer.invoke('clip:read'),
   clipWrite: t => ipcRenderer.send('clip:write', t),
   openExternal: u => ipcRenderer.send('open', u)

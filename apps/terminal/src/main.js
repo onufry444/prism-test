@@ -386,6 +386,20 @@ ipcMain.on('win', (e, a) => {
   else if (a === 'new') openTerminal();
   else if (a === 'relaunch') { app.relaunch(); quitting = true; app.exit(0); }
 });
+// resizing a frameless, transparent window from its edges (see .rz in the window)
+const resizeFrom = new Map();
+ipcMain.handle('win:resize-start', e => { const w = BrowserWindow.fromWebContents(e.sender); if (w && !w.isMaximized()) resizeFrom.set(e.sender.id, w.getBounds()); return true; });
+ipcMain.on('win:resize', (e, edge, dx, dy) => {
+  const w = BrowserWindow.fromWebContents(e.sender), b = resizeFrom.get(e.sender.id);
+  if (!w || !b || w.isMaximized()) return;
+  const [minW, minH] = w.getMinimumSize();
+  let { x, y, width, height } = b;
+  if (/e/.test(edge)) width = Math.max(minW, b.width + dx);
+  if (/s/.test(edge)) height = Math.max(minH, b.height + dy);
+  if (/w/.test(edge)) { width = Math.max(minW, b.width - dx); x = b.x + b.width - width; }
+  if (/n/.test(edge)) { height = Math.max(minH, b.height - dy); y = b.y + b.height - height; }
+  w.setBounds({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) });
+});
 ipcMain.on('app:menu', e => prismMenu(BrowserWindow.fromWebContents(e.sender)));
 ipcMain.handle('clip:read', () => clipboard.readText());
 ipcMain.on('clip:write', (e, t) => clipboard.writeText(String(t)));
@@ -532,6 +546,16 @@ async function runSmoke() {
     check('window: no tutorial', !ui.tour, ui);
     check('settings: every section renders', Object.values(ui.sections).length >= 7 && Object.values(ui.sections).every(n => n > 0), ui.sections);
     check('window: no console errors', errors.length === 0, errors);
+    {
+      const b0 = w.getBounds();
+      await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('se', 60, 40))`);
+      await wait(500);
+      const b1 = w.getBounds();
+      await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('nw', 30, 20))`);
+      await wait(500);
+      const b2 = w.getBounds();
+      check('window: resizes from its edges', b1.width === b0.width + 60 && b1.height === b0.height + 40 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2 });
+    }
 
     // 2. shells: aliases, Prism commands, Linux commands, translation through the pipe
     const testable = PROFILES.filter(p => ['pwsh', 'cmd', 'bash'].includes(p.kind) && p.id !== 'prism');

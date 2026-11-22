@@ -61,3 +61,14 @@ body.maxed #app { border-radius: 0; border: 0; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 code { font-family: var(--mono); }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+
+/* window resizing */
+.rz i { position: fixed; z-index: 1000; -webkit-app-region: no-drag; }
+.rz [data-e=n], .rz [data-e=s] { left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.rz [data-e=n] { top: 0; } .rz [data-e=s] { bottom: 0; }
+.rz [data-e=e], .rz [data-e=w] { top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.rz [data-e=e] { right: 0; } .rz [data-e=w] { left: 0; }
+.rz [data-e=ne], .rz [data-e=nw], .rz [data-e=se], .rz [data-e=sw] { width: 12px; height: 12px; }
+.rz [data-e=ne] { top: 0; right: 0; cursor: nesw-resize; } .rz [data-e=sw] { bottom: 0; left: 0; cursor: nesw-resize; }
+.rz [data-e=nw] { top: 0; left: 0; cursor: nwse-resize; } .rz [data-e=se] { bottom: 0; right: 0; cursor: nwse-resize; }
+body.maxed .rz { display: none; }
