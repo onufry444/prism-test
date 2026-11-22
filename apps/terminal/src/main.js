@@ -387,7 +387,7 @@ ipcMain.on('win', (e, a) => {
   else if (a === 'relaunch') { app.relaunch(); quitting = true; app.exit(0); }
 });
 // resizing a frameless, transparent window from its edges (see .rz in the window)
-const resizeFrom = new Map();
+const resizeFrom = new Map(), lastResize = [];
 ipcMain.handle('win:resize-start', e => { const w = BrowserWindow.fromWebContents(e.sender); if (w && !w.isMaximized()) resizeFrom.set(e.sender.id, w.getBounds()); return true; });
 ipcMain.on('win:resize', (e, edge, dx, dy) => {
   const w = BrowserWindow.fromWebContents(e.sender), b = resizeFrom.get(e.sender.id);
@@ -399,6 +399,7 @@ ipcMain.on('win:resize', (e, edge, dx, dy) => {
   if (/w/.test(edge)) { width = Math.max(minW, b.width - dx); x = b.x + b.width - width; }
   if (/n/.test(edge)) { height = Math.max(minH, b.height - dy); y = b.y + b.height - height; }
   const want = { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+  if (SMOKE_OUT) lastResize.push({ edge, dx, dy, from: b, want });
   w.setBounds(want);
   // some Windows setups ignore a move and a resize in one call on transparent windows: do them one by one
   const got = w.getBounds();
@@ -562,7 +563,7 @@ async function runSmoke() {
       const b2 = w.getBounds();
       w.setBounds({ x: b2.x + 5, y: b2.y + 5, width: b2.width - 5, height: b2.height - 5 }); await wait(300);
       const b3 = w.getBounds(); // diagnostics: move and resize in one call
-      check('window: resizes from its edges', b1.width === b0.width - 100 && b1.height === b0.height - 80 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2, b3 });
+      check('window: resizes from its edges', b1.width === b0.width - 100 && b1.height === b0.height - 80 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2, b3, calls: lastResize });
     }
 
     // 2. shells: aliases, Prism commands, Linux commands, translation through the pipe
