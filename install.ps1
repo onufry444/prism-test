@@ -49,49 +49,66 @@
       return
     }
 
+    # a log of every install, for when something goes wrong
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    $log = Join-Path $root 'install.log'
+    try { Start-Transcript -LiteralPath $log -Force | Out-Null; $logging = $true } catch { $logging = $false }
+
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('prism-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
+    $newDir = Join-Path $root 'app.new'
     try {
       Say 'Downloading the latest version...' 'Cyan'
       $zip = Join-Path $tmp 'prism.zip'
-      if (Test-Path -LiteralPath $zipUrl) { Copy-Item -LiteralPath $zipUrl -Destination $zip } else { Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing }
+      if (Test-Path -LiteralPath $zipUrl) { Copy-Item -LiteralPath $zipUrl -Destination $zip }
+      else {
+        for ($try = 1; ; $try++) {
+          try { Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing; if ((Get-Item -LiteralPath $zip).Length -gt 20MB) { break } ; throw 'the download is incomplete' }
+          catch { if ($try -ge 3) { throw "Download failed: $($_.Exception.Message)" }; Say "Download failed ($($_.Exception.Message)), trying again..." 'Yellow'; Start-Sleep -Seconds (2 * $try) }
+        }
+      }
 
       Say 'Unpacking...' 'Cyan'
       $stage = Join-Path $tmp 'x'
       Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
       $exe = Get-ChildItem -LiteralPath $stage -Filter 'Prism.exe' -Recurse | Select-Object -First 1
       if (-not $exe) { throw 'The download does not contain Prism.exe.' }
-
-      $running = @(Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase) })
-      if ($running.Count) {
-        Say 'Closing the running Prism...' 'Cyan'
-        # ask nicely first, so Prism can put the taskbar back
-        $inbox = Join-Path $env:APPDATA 'Prism\inbox'
-        if (Test-Path -LiteralPath $inbox) { [IO.File]::WriteAllText((Join-Path $inbox 'install-quit.msg'), "quit;`n") }
-        for ($i = 0; $i -lt 30 -and @(Get-Process -Id $running.Id -ErrorAction SilentlyContinue).Count; $i++) { Start-Sleep -Milliseconds 200 }
-        Get-Process -Id $running.Id -ErrorAction SilentlyContinue | Stop-Process -Force
-        Start-Sleep -Milliseconds 600
-      }
-      New-Item -ItemType Directory -Path $root -Force | Out-Null
-      if (Test-Path -LiteralPath $appDir) {
-        # Windows keeps a program's files locked until every one of its processes has fully exited
-        # (Prism, its helper windows, prism-handoff.exe, an elevated sudo helper): wait for all of them.
-        $old = $null
-        for ($i = 0; $i -lt 40; $i++) {
-          $busy = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase) })
-          if ($busy.Count) { $busy | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 250 }
-          try { Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction Stop; $old = $null; break }
-          catch { $old = $_; Start-Sleep -Milliseconds 500 }
-        }
-        if ($old) {
-          $hidden = @(Get-Process -Name Prism, prism-handoff -ErrorAction SilentlyContinue | Where-Object { -not $_.Path })
-          if ($hidden.Count) { throw 'Prism is running as administrator, so this window cannot close it. Close Prism (or run this command in an administrator PowerShell), then try again.' }
-          throw "Could not replace the old version: $($old.Exception.Message) Close Prism and try again."
-        }
-      }
-      Copy-Item -LiteralPath $exe.DirectoryName -Destination $appDir -Recurse
+      # the new version goes next to the old one first; the old one is only replaced once everything is ready
+      foreach ($d in @(Get-ChildItem -LiteralPath $root -Directory -Filter 'app.*' -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+      Copy-Item -LiteralPath $exe.DirectoryName -Destination $newDir -Recurse
     } finally {
       Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $inApp = { param($p) $p -and $p.StartsWith($appDir + '\', [StringComparison]::OrdinalIgnoreCase) }
+    $running = @(Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { & $inApp $_.Path })
+    if ($running.Count) {
+      Say 'Closing the running Prism...' 'Cyan'
+      $inbox = Join-Path $env:APPDATA 'Prism\inbox'
+      if (Test-Path -LiteralPath $inbox) { [IO.File]::WriteAllText((Join-Path $inbox 'install-quit.msg'), "quit;`n") }
+      for ($i = 0; $i -lt 30 -and @(Get-Process -Id $running.Id -ErrorAction SilentlyContinue).Count; $i++) { Start-Sleep -Milliseconds 200 }
+    }
+    if (Test-Path -LiteralPath $appDir) {
+      # Windows keeps a program's files locked until every one of its processes has exited (Prism, its helpers,
+      # prism-handoff.exe, an elevated sudo helper). Renaming the folder only works once nothing uses it, and it
+      # never leaves a half-deleted Prism behind.
+      $oldDir = Join-Path $root ('app.old-' + [DateTime]::Now.Ticks)
+      $err = $null
+      for ($i = 0; $i -lt 60; $i++) {
+        @(Get-Process -ErrorAction SilentlyContinue | Where-Object { & $inApp $_.Path }) | Stop-Process -Force -ErrorAction SilentlyContinue
+        try { Rename-Item -LiteralPath $appDir -NewName (Split-Path $oldDir -Leaf) -ErrorAction Stop; $err = $null; break }
+        catch { $err = $_; Start-Sleep -Milliseconds 500 }
+      }
+      if ($err) {
+        Remove-Item -LiteralPath $newDir -Recurse -Force -ErrorAction SilentlyContinue
+        $hidden = @(Get-Process -Name Prism, prism-handoff -ErrorAction SilentlyContinue | Where-Object { -not $_.Path })
+        if ($hidden.Count) { throw 'Prism is running as administrator, so this window cannot close it. Close Prism (or run this in an administrator PowerShell), then try again. Your current Prism was not changed.' }
+        throw "Something still uses the Prism folder ($($err.Exception.Message)). Close Prism and try again. Your current Prism was not changed."
+      }
+      Rename-Item -LiteralPath $newDir -NewName 'app'
+      Remove-Item -LiteralPath $oldDir -Recurse -Force -ErrorAction SilentlyContinue  # if something still holds a file, the next update removes it
+    } else {
+      Rename-Item -LiteralPath $newDir -NewName 'app'
     }
 
     # the `prism` command in every terminal
@@ -100,6 +117,7 @@
       '@echo off',
       'setlocal',
       'set "PRISM_APP=%LOCALAPPDATA%\Prism\app"',
+      'if not exist "%PRISM_APP%\engine\installer\prism.ps1" goto repair',
       'if "%~1"=="" (start "" "%PRISM_APP%\Prism.exe" & exit /b 0)',
       'if /i "%~1"=="run" goto run',
       'if /i "%~1"=="settings" (start "" "%PRISM_APP%\Prism.exe" --settings & exit /b 0)',
@@ -112,7 +130,14 @@
       'set "PRISM_RUN=%TEMP%\prism-run-%RANDOM%%RANDOM%.txt"',
       '>"%PRISM_RUN%" echo(%*',
       'start "" "%PRISM_APP%\Prism.exe" --run-cmdfile "%PRISM_RUN%" --run-cwd "%CD%."',
-      'exit /b 0'
+      'exit /b 0',
+      # a damaged install (files missing): download and install Prism again
+      ':repair',
+      'echo Prism is damaged, installing it again...',
+      'set "R=onufry444/prism"',
+      'if exist "%LOCALAPPDATA%\Prism\repo.txt" set /p R=<"%LOCALAPPDATA%\Prism\repo.txt"',
+      'powershell -NoProfile -ExecutionPolicy Bypass -Command "$env:PRISM_REPO=''%R%''; irm https://raw.githubusercontent.com/%R%/main/install.ps1 | iex"',
+      'exit /b %ERRORLEVEL%'
     ) -join "`r`n"
     [IO.File]::WriteAllText((Join-Path $binDir 'prism.cmd'), $cmd + "`r`n", (New-Object System.Text.ASCIIEncoding))
     # prism update uses the same repository
@@ -145,7 +170,10 @@
   } catch {
     Write-Host ''
     Say "Installation failed: $($_.Exception.Message)" 'Red'
+    if ($logging) { Say "Details: $log" 'DarkGray' }
     Say "Report it here: https://github.com/$repo/issues" 'DarkGray'
     Write-Host ''
+  } finally {
+    if ($logging) { try { Stop-Transcript | Out-Null } catch {} }
   }
 }

@@ -24,6 +24,7 @@ const { translate, needsAdmin, sudoRest } = require('./translate');
 const { Elevator } = require('./elevate');
 const { startHandoffServer } = require('./handoff');
 const { Toys } = require('./toys');
+const { Updater } = require('./updater');
 const { Integration, runSpecForFile } = require('./integrate');
 const psq = s => "'" + String(s).replace(/'/g, "''") + "'";
 
@@ -441,6 +442,28 @@ function startToys() {
     }
   });
 }
+// ---------- updates (Settings > About) ----------
+let updater = null, updateToastFor = null;
+function startUpdater() {
+  updater = new Updater({
+    version: app.getVersion(), exe: process.execPath, dataDir: DATA,
+    fetch: (url, opts) => require('electron').net.fetch(url, opts),
+    quit: () => { quitting = true; app.quit(); },
+    emit: s => {
+      broadcast('update:state', s);
+      if (s.status === 'available' && updateToastFor !== s.latest) { updateToastFor = s.latest; notify(`Prism ${s.latest} is available. Update in Settings › About.`); }
+    }
+  });
+  const last = updater.lastResult();
+  if (last) setTimeout(() => notify(last.message), 2500);
+  const auto = () => { if (config.get().startup.checkUpdates !== false) updater.check(); };
+  setTimeout(auto, 8000);
+  setInterval(auto, 12 * 3600 * 1000);
+}
+ipcMain.handle('update:state', () => updater ? { ...updater.state, canInstall: updater.canInstall() } : null);
+ipcMain.handle('update:check', async () => updater ? { ...(await updater.check()), canInstall: updater.canInstall() } : null);
+ipcMain.handle('update:install', () => updater ? updater.install() : null);
+
 function startElevator() {
   elevator = new Elevator({
     exe: process.execPath,
@@ -531,6 +554,13 @@ async function runSmoke() {
         check(`${prof.name}: %VAR% (cmd style)`, plain.toLowerCase().split('echo %username%').pop().includes(os.userInfo().username.toLowerCase()), plain.slice(-1200));
         check(`${prof.name}: prompt`, plain.includes('❯'), plain.slice(-600));
       }
+    }
+
+    // updates: the release check answers (CI sets PRISM_TEST_REPO to the repository being built)
+    if (process.env.PRISM_TEST_REPO) {
+      const u = new Updater({ version: '0.0.1', exe: process.execPath, dataDir: DATA, fetch: (url, o) => require('electron').net.fetch(url, o), quit: () => {}, emit: () => {} });
+      const s = await u.check();
+      check('update: finds the latest release', s.status === 'available' && /^\d+\.\d+\.\d+/.test(s.latest) && !!s.asset, s);
     }
 
     // toys: fetch prints through the shell, animations draw in the tab and stop on q
@@ -642,6 +672,7 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     config.onChange(() => onConfigChanged());
     if (SMOKE_OUT) return runSmoke();
     undoOldDesktop();
+    startUpdater();
     config.watch();
     onConfigChanged();
     const req = openRequest(argv, process.cwd());

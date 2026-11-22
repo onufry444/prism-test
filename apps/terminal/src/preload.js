@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   adopt: (id, cols, rows) => ipcRenderer.invoke('pty:adopt', id, cols, rows),
   onOpenTab: on('tab:open'),
   integration: () => ipcRenderer.invoke('integration:status'),
+  update: { state: () => ipcRenderer.invoke('update:state'), check: () => ipcRenderer.invoke('update:check'), install: () => ipcRenderer.invoke('update:install'), on: on('update:state') },
   onIntegration: on('integration:changed'),
   write: (id, d) => ipcRenderer.send('pty:write', id, d),
   resize: (id, c, r) => ipcRenderer.send('pty:resize', id, c, r),

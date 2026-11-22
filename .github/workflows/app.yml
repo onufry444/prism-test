@@ -68,6 +68,7 @@ jobs:
           PRISM_TEST_ELEVATE: '1'
           PRISM_TEST_HANDOFF: '1'
           PRISM_TEST_HANDOFF_HKLM: '1'
+          PRISM_TEST_REPO: ${{ github.repository }}
         run: |
           $env:PRISM_TEST_HANDOFF_LOG = Join-Path $env:RUNNER_TEMP 'handoff.log'
           $exe = Get-ChildItem dist -Recurse -Filter Prism.exe | Select-Object -First 1
@@ -101,6 +102,25 @@ jobs:
           for ($i = 0; $i -lt 60 -and @(Get-ChildItem $env:TEMP -Filter 'prism-run-*.txt').Count; $i++) { Start-Sleep -Milliseconds 500 }
           if (@(Get-ChildItem $env:TEMP -Filter 'prism-run-*.txt').Count) { throw 'prism run: Prism did not pick up the command' }
           Write-Host 'prism run works'
+          # update while Prism is running (it was started by prism run): the old version must be replaced cleanly
+          if (-not @(Get-Process -Name Prism -ErrorAction SilentlyContinue).Count) { Start-Process "$root\app\Prism.exe"; Start-Sleep -Seconds 6 }
+          Get-Content ..\..\install.ps1 -Raw | Invoke-Expression
+          if (-not (Test-Path "$root\app\engine\installer\prism.ps1")) { throw 'update over a running Prism broke the install' }
+          if (@(Get-ChildItem $root -Directory -Filter 'app.*').Count) { Write-Host 'leftover folders:'; Get-ChildItem $root -Directory -Filter 'app.*' }
+          Write-Host 'update over a running Prism works'
+          # the in-app updater's folder swap, with Prism running
+          Start-Process "$root\app\Prism.exe"; Start-Sleep -Seconds 6
+          Copy-Item "$root\app" "$root\app.new" -Recurse
+          node -e "process.stdout.write(require('./src/updater').SWAP)" | Out-File -Encoding utf8 "$env:RUNNER_TEMP\swap.ps1"
+          $work = Join-Path $env:RUNNER_TEMP 'upd-work'; New-Item -ItemType Directory $work -Force | Out-Null
+          Get-Process -Name Prism -ErrorAction SilentlyContinue | Stop-Process -Force   # in the app, Prism quits by itself
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:RUNNER_TEMP\swap.ps1" -Root $root -Work $work -Version 9.9.9
+          $res = Get-Content "$root\update-result.json" -Raw | ConvertFrom-Json
+          Write-Host "swap: $($res.message)"
+          if (-not $res.ok) { throw "in-app update swap failed: $($res.message)" }
+          if (-not (Test-Path "$root\app\Prism.exe")) { throw 'swap left no Prism' }
+          Remove-Item "$root\update-result.json"
+          Start-Sleep -Seconds 4
           # uninstall typed inside a Prism tab: hands off to one new window, never loops
           $env:TERM_PROGRAM = 'Prism'
           & "$root\bin\prism.cmd" uninstall -Force

@@ -40,4 +40,7 @@ server.on('listening', () => {
   setTimeout(() => c.write(Buffer.concat([frame(1, '{"title":"cmd","pid":42,"exe":"C:\\\\Windows\\\\System32\\\\cmd.exe"}'), frame(2, text.subarray(0, 7))]).subarray(20)), 20);
   setTimeout(() => c.write(Buffer.concat([frame(2, text.subarray(7)), frame(3, '{"code":3}')])), 40);
 });
+const { newer } = require('../src/updater');
+for (const [a, b, r] of [['0.7.0', '0.6.0', true], ['0.6.0', '0.6.0', false], ['0.10.0', '0.9.9', true], ['1.0.0', '0.99.0', true], ['0.6.0', '0.6.1', false]]) assert.strictEqual(newer(a, b), r, `${a} > ${b}`);
+console.log('OK: version comparison');
 setTimeout(() => { console.error('handoff test timed out'); process.exit(1); }, 5000).unref();

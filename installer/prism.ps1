@@ -160,14 +160,14 @@ function Remove-FromUserPath([string]$Dir) {
 }
 # Asks the running app to quit, so it can put the taskbar and the desktop work area back; forces it after a few seconds.
 function Stop-PrismApp {
-  $procs = @(Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($AppDir, [StringComparison]::OrdinalIgnoreCase) })
+  $procs = @(Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($AppDir + '\', [StringComparison]::OrdinalIgnoreCase) })
   if (-not $procs.Count) { return }
   $inbox = Join-Path $env:APPDATA 'Prism\inbox'
   if (Test-Path -LiteralPath $inbox) { [IO.File]::WriteAllText((Join-Path $inbox ('quit-' + [guid]::NewGuid().ToString('N') + '.msg')), "quit;`n") }
   for ($i = 0; $i -lt 30 -and @(Get-Process -Id ($procs.Id) -ErrorAction SilentlyContinue).Count; $i++) { Start-Sleep -Milliseconds 200 }
   # everything started from the app folder (helpers too) must be gone before its files can be deleted
   for ($i = 0; $i -lt 20; $i++) {
-    $busy = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($AppDir, [StringComparison]::OrdinalIgnoreCase) })
+    $busy = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($AppDir + '\', [StringComparison]::OrdinalIgnoreCase) })
     if (-not $busy.Count) { break }
     $busy | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 250

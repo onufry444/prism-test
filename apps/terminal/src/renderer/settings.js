@@ -61,10 +61,10 @@ P.goSection = s => go(s);
 // ---------- render ----------
 function go(sec) {
   st.section = SEC(sec) ? sec : 'terminal';
+  if (st.section === 'about' && (!P.update || P.update.status === 'idle')) { P.update = { ...(P.update || {}), status: 'checking' }; api.update.check(); }
   if (st.section === 'windows') api.integration().then(s => { P.integration = s; if (st.section === 'windows' && !$('#settings').hidden) renderSection(); });
   const s = SEC(st.section);
-  $('#sNav').innerHTML = SECTIONS.map(x => `<button class="nb${x.id === st.section ? ' on' : ''}" data-s="${x.id}"><svg viewBox="0 0 24 24">${ICON[x.id]}</svg>${x.name}</button>`).join('')
-    + '<div class="hint"><kbd>Esc</kbd> back to the terminal</div>';
+  renderNav();
   $('#sTitle').textContent = s.name;
   $('#sSub').textContent = s.id === 'about' ? `Version ${P.version}` : s.sub;
   $('#settings').classList.toggle('nopv', !s.pv);
@@ -72,6 +72,10 @@ function go(sec) {
   renderSection();
   updatePreview();
   $('#sMain').scrollTop = 0;
+}
+function renderNav() {
+  $('#sNav').innerHTML = SECTIONS.map(x => `<button class="nb${x.id === st.section ? ' on' : ''}" data-s="${x.id}"><svg viewBox="0 0 24 24">${ICON[x.id]}</svg>${x.name}${x.id === 'about' && P.update?.status === 'available' ? '<i class="dot" title="Update available"></i>' : ''}</button>`).join('')
+    + '<div class="hint"><kbd>Esc</kbd> back to the terminal</div>';
 }
 function renderSection() {
   const R = { terminal: secTerminal, shell: secShell, admin: secAdmin, windows: secWindows, aliases: secAliases, keys: secKeys, files: secFiles, about: secAbout };
@@ -220,8 +224,27 @@ function secFiles() {
     + group('Set in config.jsonc', ov.length ? `<div class="chips">${ov.map(o => `<span class="chip on">${esc(o)}</span>`).join('')}</div>` : '<p class="note">Nothing yet: everything comes from this Settings screen.</p>')
     + group('Shell files', '<p class="note">Prism writes startup files for PowerShell, bash and cmd from your settings. Your own $PROFILE and .bashrc still load first.</p><div class="btns"><button class="btn ghost" data-open="data">Open Prism data folder</button></div>');
 }
+function updateBox() {
+  const u = P.update || { status: 'idle' };
+  const line = {
+    idle: 'Not checked yet.', checking: 'Checking for updates…', latest: `You have the latest version (${esc(P.version)}).`,
+    available: `<b>Prism ${esc(u.latest)}</b> is available. You have ${esc(P.version)}.`,
+    downloading: `Downloading Prism ${esc(u.latest)}… ${u.progress || 0}%`, preparing: 'Getting the new version ready…', restarting: 'Restarting Prism…',
+    error: esc(u.error || 'Something went wrong.')
+  }[u.status] || '';
+  const busy = ['checking', 'downloading', 'preparing', 'restarting'].includes(u.status);
+  const bar = u.status === 'downloading' ? `<div class="pbar"><i style="width:${u.progress || 0}%"></i></div>` : '';
+  const btn = u.status === 'available'
+    ? (u.canInstall === false ? '<p class="note">Run <code class="k">prism update</code> in a terminal to install it.</p>' : '<button class="btn" data-update="install">Update and restart</button>')
+    : `<button class="btn ghost" data-update="check" ${busy ? 'disabled' : ''}>Check for updates</button>`;
+  const notes = u.status === 'available' && u.notes ? `<details class="notes"><summary>What's new</summary><pre>${esc(u.notes)}</pre></details>` : '';
+  return group('Updates', `<p class="note">${line}</p>${u.error && u.status !== 'error' ? `<div class="notice err">${esc(u.error)}</div>` : ''}${bar}${notes}<div class="btns">${btn}</div>`
+    + toggle('data-c', 'startup.checkUpdates', 'Check for updates automatically', 'When Prism starts and twice a day. Nothing is installed without your click.'));
+}
+api.update.on(s => { P.update = { ...(P.update || {}), ...s }; if (!$('#settings').hidden) { if (st.section === 'about') renderSection(); renderNav(); } });
+api.update.state().then(s => { if (s) P.update = s; });
 function secAbout() {
-  return group('Prism', `<p class="note">A terminal for Windows that speaks PowerShell, cmd and bash, runs admin commands only when you say so, and is configured like Linux tools: one text file, live reload.</p>
+  return updateBox() + group('Prism', `<p class="note">A terminal for Windows that speaks PowerShell, cmd and bash, runs admin commands only when you say so, and is configured like Linux tools: one text file, live reload.</p>
       <div class="btns"><button class="btn ghost" data-link="https://github.com/onufry444/prism">GitHub</button><button class="btn ghost" data-link="https://github.com/onufry444/prism/issues">Report a problem</button></div>`)
     + group('From any terminal', `<table class="keys">
       <tr><td><code class="k">prism</code></td><td>open Prism</td></tr><tr><td><code class="k">prism settings</code></td><td>open these settings</td></tr>
@@ -247,6 +270,8 @@ root.addEventListener('click', async e => {
   if ('bgclear' in d) { setLive('terminal.backgroundImage', '', true); renderSection(); return; }
   if (d.open) return api.openFile(d.open);
   if (d.link) return api.openExternal(d.link);
+  if (d.update === 'check') { P.update = { ...(P.update || {}), status: 'checking' }; renderSection(); return api.update.check(); }
+  if (d.update === 'install') return api.update.install();
   if (d.ae) { st.editing = P.cfg.aliases[+d.ae]?.name; renderSection(); $('#aName')?.focus(); return; }
   if (d.ad) { const c = P.cfg.aliases[+d.ad]; await P.set({ aliases: P.cfg.aliases.filter((x, i) => i !== +d.ad) }); if (st.editing === c.name) st.editing = null; renderSection(); P.toast(`Deleted ${c.name}`); return; }
   if ('acancel' in d) { st.editing = null; renderSection(); return; }

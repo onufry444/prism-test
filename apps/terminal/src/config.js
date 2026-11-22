@@ -81,7 +81,8 @@ const DEFAULTS = {
     // inline: the elevated command runs in the same tab | window: in its own console window
     mode: 'inline'
   },
-  startup: { launchAtLogin: false, restoreTabs: false }
+  // checkUpdates: look for a new version at start and twice a day (Settings > About shows it)
+  startup: { launchAtLogin: false, restoreTabs: false, checkUpdates: true }
 };
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'prism');
