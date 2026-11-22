@@ -165,8 +165,13 @@ function Stop-PrismApp {
   $inbox = Join-Path $env:APPDATA 'Prism\inbox'
   if (Test-Path -LiteralPath $inbox) { [IO.File]::WriteAllText((Join-Path $inbox ('quit-' + [guid]::NewGuid().ToString('N') + '.msg')), "quit;`n") }
   for ($i = 0; $i -lt 30 -and @(Get-Process -Id ($procs.Id) -ErrorAction SilentlyContinue).Count; $i++) { Start-Sleep -Milliseconds 200 }
-  Get-Process -Id ($procs.Id) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 300
+  # everything started from the app folder (helpers too) must be gone before its files can be deleted
+  for ($i = 0; $i -lt 20; $i++) {
+    $busy = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($AppDir, [StringComparison]::OrdinalIgnoreCase) })
+    if (-not $busy.Count) { break }
+    $busy | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 250
+  }
 }
 function Invoke-Uninstall {
   # Inside a Prism tab, closing Prism would end this script too: finish in a separate window.

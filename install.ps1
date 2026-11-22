@@ -73,7 +73,22 @@
         Start-Sleep -Milliseconds 600
       }
       New-Item -ItemType Directory -Path $root -Force | Out-Null
-      if (Test-Path -LiteralPath $appDir) { Remove-Item -LiteralPath $appDir -Recurse -Force }
+      if (Test-Path -LiteralPath $appDir) {
+        # Windows keeps a program's files locked until every one of its processes has fully exited
+        # (Prism, its helper windows, prism-handoff.exe, an elevated sudo helper): wait for all of them.
+        $old = $null
+        for ($i = 0; $i -lt 40; $i++) {
+          $busy = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase) })
+          if ($busy.Count) { $busy | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 250 }
+          try { Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction Stop; $old = $null; break }
+          catch { $old = $_; Start-Sleep -Milliseconds 500 }
+        }
+        if ($old) {
+          $hidden = @(Get-Process -Name Prism, prism-handoff -ErrorAction SilentlyContinue | Where-Object { -not $_.Path })
+          if ($hidden.Count) { throw 'Prism is running as administrator, so this window cannot close it. Close Prism (or run this command in an administrator PowerShell), then try again.' }
+          throw "Could not replace the old version: $($old.Exception.Message) Close Prism and try again."
+        }
+      }
       Copy-Item -LiteralPath $exe.DirectoryName -Destination $appDir -Recurse
     } finally {
       Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
