@@ -20,6 +20,7 @@ const NAMES = { explorer: 'File Explorer', msedge: 'Edge', chrome: 'Chrome', fir
   powerpnt: 'PowerPoint', steam: 'Steam', obs64: 'OBS', vlc: 'VLC', systemsettings: 'Settings', taskmgr: 'Task Manager', mspaint: 'Paint', notepad__: '' };
 const prettyName = exe => { const b = path.basename(exe || '', '.exe'); return NAMES[b.toLowerCase()] || (b ? b.charAt(0).toUpperCase() + b.slice(1) : 'App'); };
 const keyOf = exe => (exe || '').toLowerCase();
+const isUri = s => /^[a-z][a-z0-9+.-]+:/i.test(s || '');
 
 function defaultPinned() {
   const pf = process.env.ProgramFiles || 'C:\\Program Files', pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', local = process.env.LOCALAPPDATA || '';
@@ -40,9 +41,9 @@ class Desktop {
   constructor({ preload, rendererDir, getConfig, getCss, saveGui, onPrism, onMenu }) {
     Object.assign(this, { preload, rendererDir, getConfig, getCss, saveGui, onPrism, onMenu });
     this.ticks = 0;
-    screen.on('display-metrics-changed', () => this.layout());
-    screen.on('display-added', () => this.layout());
-    screen.on('display-removed', () => this.layout());
+    screen.on('display-metrics-changed', (e, d, changed) => { if (!changed || changed.includes('bounds') || changed.includes('scaleFactor')) this.relayoutSoon(); });
+    screen.on('display-added', () => this.relayoutSoon());
+    screen.on('display-removed', () => this.relayoutSoon());
     this.dock = null; this.bar = null; this.poll = null; this.icons = new Map(); this.items = [];
     this.statePath = path.join(app.getPath('userData'), 'desktop-state.json');
     this.state = this.readState();
@@ -62,10 +63,10 @@ class Desktop {
   apply() {
     const cfg = this.getConfig();
     const want = { dock: !!cfg.dock.enabled && win32.available(), bar: !!cfg.bar.enabled && win32.available() };
-    if (want.dock && !this.dock) this.dock = this.makeWindow('dock');
-    if (!want.dock && this.dock) { this.dock.destroy(); this.dock = null; }
-    if (want.bar && !this.bar) { this.bar = this.makeWindow('bar'); this.glaze.start(); }
-    if (!want.bar && this.bar) { this.bar.destroy(); this.bar = null; this.glaze.stop(); }
+    if (want.dock && !this.dock) { this.dock = this.makeWindow('dock'); this.dockRegistered = false; }
+    if (!want.dock && this.dock) { if (this.dockRegistered) win32.appbarRemove(win32.hwndOf(this.dock)); this.dockRegistered = false; this.dock.destroy(); this.dock = null; }
+    if (want.bar && !this.bar) { this.bar = this.makeWindow('bar'); this.barRegistered = false; this.glaze.start(); }
+    if (!want.bar && this.bar) { if (this.barRegistered) win32.appbarRemove(win32.hwndOf(this.bar)); this.barRegistered = false; this.bar.destroy(); this.bar = null; this.glaze.stop(); }
     this.taskbar(want.dock && cfg.dock.hideTaskbar);
     this.layout();
     if (this.dock || this.bar) { if (!this.poll) this.poll = setInterval(() => this.tick(), 900); this.tick(); }
@@ -85,23 +86,49 @@ class Desktop {
     w.webContents.on('did-finish-load', () => { this.send(kind, 'desk:config', { config: this.getConfig(), css: this.getCss() }); if (kind === 'dock') this.pushItems(true); else this.pushBar(); });
     w.once('ready-to-show', () => { w.showInactive(); if (kind === 'bar' && this.getConfig().terminal.blur) win32.blurBehind(win32.hwndOf(w), 'acrylic', 0x01000000); });
     if (kind === 'dock') w.setIgnoreMouseEvents(true, { forward: true });
+    // Windows tells app bars when the screen layout changes (ABN_POSCHANGED = 1)
+    try { w.hookWindowMessage(0x0401, wParam => { if (wParam.readUInt32LE(0) === 1) this.relayoutSoon(); }); } catch {}
     w.on('closed', () => { if (this[kind] === w) this[kind] = null; });
     return w;
   }
-  layout() {
+  // force: re-register app bars even if nothing changed (Windows asked us to)
+  layout(force = false) {
     const cfg = this.getConfig(), d = screen.getPrimaryDisplay(), b = d.bounds, sf = d.scaleFactor;
-    const barH = this.bar ? Math.round(cfg.bar.height) : 0;
-    const dockReserve = this.dock && !cfg.dock.autohide && cfg.dock.reserveSpace ? Math.round(cfg.dock.iconSize + 22) : 0;
-    const dockH = Math.round(cfg.dock.iconSize * Math.max(1, cfg.dock.magnification) + 46);
-    if (this.bar) this.bar.setBounds({ x: b.x, y: b.y, width: b.width, height: barH });
-    if (this.dock) this.dock.setBounds({ x: b.x, y: b.y + b.height - dockH, width: b.width, height: dockH });
-    // work area in physical pixels; keep the original to restore it later
-    if (!this.state.workArea) { const wa = win32.getWorkArea(); if (wa) { this.state.workArea = wa; this.writeState(); } }
-    if ((this.bar && cfg.bar.reserveSpace) || dockReserve) {
-      const want = { left: Math.round(b.x * sf), top: Math.round((b.y + (cfg.bar.reserveSpace ? barH : 0)) * sf), right: Math.round((b.x + b.width) * sf), bottom: Math.round((b.y + b.height - dockReserve) * sf) };
-      const cur = win32.getWorkArea();
-      if (!cur || cur.left !== want.left || cur.top !== want.top || cur.right !== want.right || cur.bottom !== want.bottom) win32.setWorkArea(want);
-    } else this.restoreWorkArea();
+    const same = (k, r) => { const j = JSON.stringify(r); if (!force && this[k] === j) return true; this[k] = j; return false; };
+    const px = r => ({ left: Math.round(r.x * sf), top: Math.round(r.y * sf), right: Math.round((r.x + r.width) * sf), bottom: Math.round((r.y + r.height) * sf) });
+    const dip = r => ({ x: Math.round(r.left / sf), y: Math.round(r.top / sf), width: Math.round((r.right - r.left) / sf), height: Math.round((r.bottom - r.top) / sf) });
+    this.restoreWorkArea(); // from versions that set the work area directly
+    if (this.bar) {
+      const h = Math.round(cfg.bar.height), want = { x: b.x, y: b.y, width: b.width, height: h };
+      const hwnd = win32.hwndOf(this.bar);
+      if (cfg.bar.reserveSpace) {
+        if (!same('barRect', [want, this.barRegistered])) {
+          const got = win32.appbar(hwnd, 'top', px(want), !this.barRegistered);
+          this.barRegistered = true;
+          this.bar.setBounds(got ? dip(got) : want);
+        }
+      } else {
+        if (this.barRegistered) { win32.appbarRemove(hwnd); this.barRegistered = false; }
+        this.bar.setBounds(want);
+      }
+    }
+    if (this.dock) {
+      // the window is taller than the dock so magnified icons fit; only the dock itself is reserved
+      const dockH = Math.round(cfg.dock.iconSize * Math.max(1, cfg.dock.magnification) + 46);
+      const reserve = Math.round(cfg.dock.iconSize + 22);
+      this.dock.setBounds({ x: b.x, y: b.y + b.height - dockH, width: b.width, height: dockH });
+      const hwnd = win32.hwndOf(this.dock);
+      if (cfg.dock.reserveSpace && !cfg.dock.autohide) {
+        const r = { x: b.x, y: b.y + b.height - reserve, width: b.width, height: reserve };
+        if (!same('dockRect', [r, this.dockRegistered])) { win32.appbar(hwnd, 'bottom', px(r), !this.dockRegistered); this.dockRegistered = true; }
+      } else if (this.dockRegistered) { win32.appbarRemove(hwnd); this.dockRegistered = false; }
+    }
+  }
+  // at most one forced re-layout per second, so two app bars can't keep notifying each other
+  relayoutSoon() {
+    clearTimeout(this.relayT);
+    const wait = Math.max(250, 1000 - (Date.now() - (this.lastForced || 0)));
+    this.relayT = setTimeout(() => { this.lastForced = Date.now(); this.layout(true); }, wait);
   }
   restoreWorkArea() {
     if (!this.state.workArea) return;
@@ -121,15 +148,17 @@ class Desktop {
   restore() {
     clearInterval(this.poll); this.poll = null;
     this.glaze.stop();
-    for (const k of ['dock', 'bar']) { if (this[k] && !this[k].isDestroyed()) this[k].destroy(); this[k] = null; }
+    for (const k of ['dock', 'bar']) {
+      if (this[k] && !this[k].isDestroyed()) { if (this[k + 'Registered']) win32.appbarRemove(win32.hwndOf(this[k])); this[k].destroy(); }
+      this[k] = null; this[k + 'Registered'] = false;
+    }
     this.taskbar(false);
     this.restoreWorkArea();
   }
 
   // ---------- polling ----------
   tick() {
-    // Explorer recalculates the work area when the taskbar changes; re-assert ours now and then
-    if (++this.ticks % 6 === 0) this.layout();
+    if (++this.ticks % 10 === 0) this.layout();
     if (this.dock) this.pushItems(false);
     if (this.bar) this.pushBar();
     // hide over full-screen apps (videos, games)
@@ -141,7 +170,7 @@ class Desktop {
   windows() { return win32.listWindows(this.ownHwnds()); }
   async icon(item) {
     const src = item.icon || item.path;
-    if (!src || /^[a-z-]+:/i.test(src) && !item.icon) return null;
+    if (!src || isUri(src)) return null;
     if (this.icons.has(src)) return this.icons.get(src);
     let url = null;
     try { const img = await nativeImage.createThumbnailFromPath(src, { width: 128, height: 128 }); if (!img.isEmpty()) url = img.toDataURL(); } catch {}
@@ -185,7 +214,7 @@ class Desktop {
   // ---------- actions ----------
   launch(it) {
     if (it.prism) return this.onPrism('open');
-    if (/^[a-z-]+:/i.test(it.path)) return shell.openExternal(it.path);
+    if (isUri(it.path)) return shell.openExternal(it.path);
     try { spawn(it.path, it.args || [], { detached: true, stdio: 'ignore', cwd: os.homedir() }).unref(); } catch { shell.openPath(it.path); }
   }
   activate(key) {

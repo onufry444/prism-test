@@ -136,6 +136,22 @@ function blurBehind(hwnd, mode, tint = 0x01000000) {
   accent.writeUInt32LE(tint >>> 0, 8);
   try { return !!a.SetWindowCompositionAttribute(hwnd, { Attrib: 19, pvData: accent, cbData: 16 }); } catch { return false; } // WCA_ACCENT_POLICY
 }
+// AppBar: tells Windows to reserve a screen edge for the window (like the taskbar does),
+// so maximized windows and GlazeWM stay clear of it. rect is in physical pixels; returns the final rect.
+function appbar(hwnd, edge, rect, register) {
+  const a = load(); if (!a || !hwnd) return null;
+  const data = { cbSize: a.koffi.sizeof(a.APPBARDATA), hWnd: hwnd, uCallbackMessage: 0x0401, uEdge: edge === 'top' ? 1 : 3, rc: { ...rect }, lParam: 0 };
+  if (register) a.SHAppBarMessage(0, data); // ABM_NEW
+  const h = rect.bottom - rect.top;
+  a.SHAppBarMessage(2, data); // ABM_QUERYPOS: Windows may move the rect (e.g. next to another app bar)
+  if (edge === 'top') data.rc.bottom = data.rc.top + h; else data.rc.top = data.rc.bottom - h;
+  a.SHAppBarMessage(3, data); // ABM_SETPOS
+  return { ...data.rc };
+}
+function appbarRemove(hwnd) {
+  const a = load(); if (!a || !hwnd) return;
+  a.SHAppBarMessage(1, { cbSize: a.koffi.sizeof(a.APPBARDATA), hWnd: hwnd, uCallbackMessage: 0, uEdge: 0, rc: { left: 0, top: 0, right: 0, bottom: 0 }, lParam: 0 }); // ABM_REMOVE
+}
 const hwndOf = win => { try { const b = win.getNativeWindowHandle(); return b.length >= 8 ? Number(b.readBigUInt64LE(0)) : b.readUInt32LE(0); } catch { return 0; } };
 
-module.exports = { windowRect, blurBehind, hwndOf, available: () => !!load(), listWindows, focus, minimize, close, foreground, taskbarAutohide, getWorkArea, setWorkArea, exePath };
+module.exports = { windowRect, blurBehind, hwndOf, appbar, appbarRemove, available: () => !!load(), listWindows, focus, minimize, close, foreground, taskbarAutohide, getWorkArea, setWorkArea, exePath };

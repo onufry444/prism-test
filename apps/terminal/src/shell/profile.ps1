@@ -66,11 +66,8 @@ function global:__prism_resolve([string]$p) {
 function global:__prism_hidden($i) { return ($i.Name.StartsWith('.') -or [bool]($i.Attributes -band [IO.FileAttributes]::Hidden)) }
 
 if ($global:PrismConfig.linux) {
-  foreach ($a in 'ls', 'rm', 'cp', 'mv', 'cat', 'kill', 'ps', 'curl', 'wget', 'man', 'md', 'rmdir') {
-    if (Test-Path "Alias:$a") { Remove-Item "Alias:$a" -Force -ErrorAction SilentlyContinue }
-  }
-  # Windows PowerShell 5.1 aliases curl/wget to Invoke-WebRequest; the real curl.exe ships with Windows.
-  if (Test-Path Alias:curl) { Remove-Item Alias:curl -Force -ErrorAction SilentlyContinue }
+  # Windows PowerShell 5.1 aliases curl to Invoke-WebRequest; the real curl.exe ships with Windows.
+  if (Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue) { Set-Alias -Name curl -Value curl.exe -Scope Global -Option AllScope -Force }
 
   # ---------------------------------------------------------------- ls
   function global:__prism_lscolor($i) {
@@ -129,7 +126,7 @@ if ($global:PrismConfig.linux) {
       $sb.ToString()
     }
   }
-  function global:ls {
+  function global:Prism-ls {
     if (__prism_ps_style $args) { Get-ChildItem @args; return }
     $p = __prism_flags $args 'laAh1RtSrdF'
     $o = @{ long = (__prism_has $p 'l'); all = ((__prism_has $p 'a') -or $p.long.Contains('all')); almost = ((__prism_has $p 'A') -or $p.long.Contains('almost-all'));
@@ -165,7 +162,7 @@ if ($global:PrismConfig.linux) {
   function global:l { ls -lA @args }
 
   # ---------------------------------------------------------------- files
-  function global:rm {
+  function global:Prism-rm {
     if (__prism_ps_style $args) { Remove-Item @args; return }
     $p = __prism_flags $args 'rRfivd'
     $rec = (__prism_has $p 'r') -or (__prism_has $p 'R') -or $p.long.Contains('recursive')
@@ -187,7 +184,7 @@ if ($global:PrismConfig.linux) {
       }
     }
   }
-  function global:cp {
+  function global:Prism-cp {
     if (__prism_ps_style $args) { Copy-Item @args; return }
     $p = __prism_flags $args 'rRfnvpa'
     $rec = (__prism_has $p 'r') -or (__prism_has $p 'R') -or (__prism_has $p 'a') -or $p.long.Contains('recursive')
@@ -206,7 +203,7 @@ if ($global:PrismConfig.linux) {
       }
     }
   }
-  function global:mv {
+  function global:Prism-mv {
     if (__prism_ps_style $args) { Move-Item @args; return }
     $p = __prism_flags $args 'fnvi'
     if ($p.rest.Count -lt 2) { Write-Host 'mv: missing destination file operand' -ForegroundColor Red; return }
@@ -221,7 +218,7 @@ if ($global:PrismConfig.linux) {
       }
     }
   }
-  function global:mkdir {
+  function global:Prism-mkdir {
     if (__prism_ps_style $args) { New-Item -ItemType Directory @args; return }
     $p = __prism_flags $args 'pv'
     foreach ($d in $p.rest) {
@@ -233,8 +230,8 @@ if ($global:PrismConfig.linux) {
       if (__prism_has $p 'v') { "mkdir: created directory '$d'" }
     }
   }
-  function global:md { mkdir @args }
-  function global:rmdir {
+  function global:Prism-md { mkdir @args }
+  function global:Prism-rmdir {
     if (__prism_ps_style $args) { Remove-Item @args; return }
     foreach ($d in $args) {
       if ((Get-ChildItem -LiteralPath ([string]$d) -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) { Write-Host "rmdir: failed to remove '$d': Directory not empty" -ForegroundColor Red }
@@ -249,7 +246,7 @@ if ($global:PrismConfig.linux) {
       else { [void](New-Item -ItemType File -Path $f -Force) }
     }
   }
-  function global:cat {
+  function global:Prism-cat {
     if (-not $args.Count) { $input; return }
     if (__prism_ps_style $args) { Get-Content @args; return }
     $p = __prism_flags $args 'nbAsE'
@@ -469,7 +466,7 @@ if ($global:PrismConfig.linux) {
     foreach ($a in $args) { if (([string]$a) -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') { Set-Item "env:$($Matches[1])" $Matches[2] } }
   }
   function global:unset { foreach ($n in $args) { Remove-Item "env:$n" -ErrorAction SilentlyContinue; Remove-Variable -Name $n -Scope Global -ErrorAction SilentlyContinue } }
-  function global:kill {
+  function global:Prism-kill {
     if (__prism_ps_style $args) { Stop-Process @args; return }
     $force = $false; $ids = @()
     foreach ($a in $args) { $s = [string]$a; if ($s -match '^-(9|KILL|SIGKILL)$') { $force = $true } elseif ($s -match '^-(\d+|[A-Z]+)$') { } elseif ($s -eq '-l') { 'HUP INT QUIT KILL TERM'; return } else { $ids += [int]$s } }
@@ -478,7 +475,7 @@ if ($global:PrismConfig.linux) {
   function global:killall { $force = $args -contains '-9'; foreach ($n in ($args | Where-Object { $_ -notmatch '^-' })) { $ps = @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($n)) -ErrorAction SilentlyContinue); if (-not $ps.Count) { Write-Host "${n}: no process found" -ForegroundColor Red }; $ps | Stop-Process -Force:$force } }
   function global:pkill { $force = $args -contains '-9'; foreach ($n in ($args | Where-Object { $_ -notmatch '^-' })) { Get-Process | Where-Object { $_.ProcessName -match $n } | Stop-Process -Force:$force } }
   function global:pgrep { foreach ($n in ($args | Where-Object { $_ -notmatch '^-' })) { Get-Process | Where-Object { $_.ProcessName -match $n } | ForEach-Object { if ($args -contains '-l') { "$($_.Id) $($_.ProcessName)" } else { $_.Id } } } }
-  function global:ps {
+  function global:Prism-ps {
     if (__prism_ps_style $args) { Get-Process @args; return }
     if (-not $args.Count) { Get-Process; return }
     '{0,7} {1,6} {2,9} {3}' -f 'PID', '%CPU', 'MEM', 'COMMAND'
@@ -501,10 +498,14 @@ if ($global:PrismConfig.linux) {
   function global:pbcopy { $t = ($input | Out-String); Set-Clipboard -Value $t.TrimEnd("`r", "`n") }
   function global:pbpaste { Get-Clipboard }
   function global:less { if ($args.Count) { Get-Content -LiteralPath ([string]$args[0]) | Out-Host -Paging } else { $input | Out-Host -Paging } }
-  function global:wget {
+  function global:Prism-wget {
     foreach ($u in ($args | Where-Object { $_ -notmatch '^-' })) { $name = [IO.Path]::GetFileName(([uri]$u).AbsolutePath); if (-not $name) { $name = 'index.html' }; Invoke-WebRequest -Uri $u -OutFile $name -UseBasicParsing; "saved '$name'" }
   }
-  function global:man { Get-Help @args -Full | Out-Host -Paging }
+  function global:Prism-man { Get-Help @args -Full | Out-Host -Paging }
+
+  # Built-in aliases (ls, rm, cp...) beat functions, so the aliases themselves are pointed at Prism's versions.
+  # Global + AllScope makes that work in every scope, and the original cmdlets stay available by full name.
+  foreach ($n in 'ls', 'rm', 'cp', 'mv', 'mkdir', 'md', 'rmdir', 'cat', 'kill', 'ps', 'wget', 'man') { Set-Alias -Name $n -Value "Prism-$n" -Scope Global -Option AllScope -Force }
 
   # Suggest an install when a well-known tool is missing.
   $global:__PrismInstall = @{ vim = 'vim.vim'; nvim = 'Neovim.Neovim'; nano = 'GNU.Nano'; htop = 'aristocratos.btop4win'; btop = 'aristocratos.btop4win'; top = 'aristocratos.btop4win';
