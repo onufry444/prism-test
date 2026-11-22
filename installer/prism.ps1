@@ -27,7 +27,6 @@ $BackupFile  = Join-Path $DataDir 'backup.json'
 $CurrentFile = Join-Path $DataDir 'current.json'
 $AppDir      = Join-Path $DataDir 'app'
 $BinDir      = Join-Path $DataDir 'bin'
-$InstallUrl  = 'https://raw.githubusercontent.com/onufry444/prism/main/install.ps1'
 $Utf8NoBom   = New-Object System.Text.UTF8Encoding $false
 # Prism 0.3 desktop themes could start window tiling at login; restore removes that too
 $StartupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Prism GlazeWM.lnk'
@@ -104,7 +103,12 @@ function Show-Version {
 function Invoke-Update {
   Write-Step 'Opening the updater in a new window (Prism will close for a moment)'
   $env:TERM_PROGRAM = $null
-  Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', "irm $InstallUrl | iex"
+  # update from the repository Prism was installed from
+  $repo = 'onufry444/prism'
+  $f = Join-Path $DataDir 'repo.txt'
+  if (Test-Path -LiteralPath $f) { $r = ([IO.File]::ReadAllText($f)).Trim(); if ($r -match '^[\w.-]+/[\w.-]+$') { $repo = $r } }
+  $cmd = "`$env:PRISM_REPO = '$repo'; irm https://raw.githubusercontent.com/$repo/main/install.ps1 | iex"
+  Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', $cmd
 }
 function Remove-FromUserPath([string]$Dir) {
   $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
@@ -154,6 +158,7 @@ function Invoke-Uninstall {
   Get-ItemProperty $run -ErrorAction SilentlyContinue | ForEach-Object { $_.PSObject.Properties } | Where-Object { $_.Value -is [string] -and $_.Value -like "*$AppDir*" } | ForEach-Object { Remove-ItemProperty -Path $run -Name $_.Name -ErrorAction SilentlyContinue }
   Remove-FromUserPath $BinDir
   foreach ($d in $BinDir, $AppDir) { if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }
+  Remove-Item -LiteralPath (Join-Path $DataDir 'repo.txt') -Force -ErrorAction SilentlyContinue
   Write-Ok 'Prism was removed.'
   if ($Purge) {
     foreach ($d in $DataDir, (Join-Path $env:APPDATA 'Prism'), (Join-Path $env:USERPROFILE '.config\prism')) { if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue } }

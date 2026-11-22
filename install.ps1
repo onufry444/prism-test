@@ -10,7 +10,8 @@
   $ProgressPreference = 'SilentlyContinue'
   try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
-  $repo = 'onufry444/prism'
+  # PRISM_REPO=owner/name installs from another copy of the repository (for testing)
+  $repo = if ($env:PRISM_REPO -match '^[\w.-]+/[\w.-]+$') { $env:PRISM_REPO } else { 'onufry444/prism' }
   $zipUrl = if ($env:PRISM_ZIP) { $env:PRISM_ZIP } else { "https://github.com/$repo/releases/latest/download/Prism-win-x64.zip" }
   $root = Join-Path $env:LOCALAPPDATA 'Prism'
   $appDir = Join-Path $root 'app'
@@ -69,6 +70,8 @@
       '(goto) 2>nul & powershell -NoProfile -ExecutionPolicy Bypass -File "%PRISM_APP%\engine\installer\prism.ps1" %*'
     ) -join "`r`n"
     [IO.File]::WriteAllText((Join-Path $binDir 'prism.cmd'), $cmd + "`r`n", (New-Object System.Text.ASCIIEncoding))
+    # prism update uses the same repository
+    [IO.File]::WriteAllText((Join-Path $root 'repo.txt'), $repo, (New-Object System.Text.ASCIIEncoding))
 
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
     try {
