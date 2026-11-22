@@ -501,14 +501,14 @@ async function runSmoke() {
 
     // 3. a tab that runs one program, and stays open with its exit code
     {
-      const id = await w.webContents.executeJavaScript(`P.newTab(null, null, { run: { file: 'cmd.exe', args: '/d /s /c "echo RUN_OK & exit 4"', title: 'runtest' } }).then(t => t.id)`);
+      const id = await w.webContents.executeJavaScript(`window.Prism.newTab(null, null, { run: { file: 'cmd.exe', args: '/d /s /c "echo RUN_OK & exit 4"', title: 'runtest' } }).then(t => t.id)`);
       await wait(4000);
-      const r = await w.webContents.executeJavaScript(`(() => { const t = P.tabs.find(x => x.id === ${JSON.stringify(id)}); const b = t && t.term.buffer.active; return { title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+      const r = await w.webContents.executeJavaScript(`(() => { const t = window.Prism.tabs.find(x => x.id === ${JSON.stringify(id)}); const b = t && t.term.buffer.active; return { title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
       check('run: program output in its own tab', /RUN_OK/.test(r.text) && r.title === 'runtest', r);
       check('run: tab stays open with the exit code', /exited with code 4/.test(r.text), r.text.slice(-300));
-      await w.webContents.executeJavaScript(`P.typeInActive('x')`);
+      await w.webContents.executeJavaScript(`window.Prism.typeInActive('x')`);
       await wait(800);
-      const left = await w.webContents.executeJavaScript(`P.tabs.some(x => x.id === ${JSON.stringify(id)})`);
+      const left = await w.webContents.executeJavaScript(`window.Prism.tabs.some(x => x.id === ${JSON.stringify(id)})`);
       check('run: a key closes the finished tab', !left, left);
     }
 
@@ -533,7 +533,7 @@ async function runSmoke() {
       check('default terminal: Windows hands the console to Prism', !!got, { handoffs: smokeHandoffs, log: (() => { try { return fs.readFileSync(process.env.PRISM_TEST_HANDOFF_LOG || '', 'utf8').slice(-3000); } catch { return null; } })() });
       if (got) {
         await wait(7000);
-        const r = await w.webContents.executeJavaScript(`(() => { const t = P.tabs.find(x => x.id === ${JSON.stringify(got.id)}); const b = t && t.term.buffer.active; return { tab: !!t, title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+        const r = await w.webContents.executeJavaScript(`(() => { const t = window.Prism.tabs.find(x => x.id === ${JSON.stringify(got.id)}); const b = t && t.term.buffer.active; return { tab: !!t, title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
         check('default terminal: console output in the tab', r.tab && /HANDOFF_OK/.test(r.text), r);
         check('default terminal: exit code shown', /exited with code 3/.test(r.text), r.text.slice(-300));
       }
