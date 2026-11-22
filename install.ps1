@@ -74,7 +74,8 @@
       $exe = Get-ChildItem -LiteralPath $stage -Filter 'Prism.exe' -Recurse | Select-Object -First 1
       if (-not $exe) { throw 'The download does not contain Prism.exe.' }
       # the new version goes next to the old one first; the old one is only replaced once everything is ready
-      foreach ($d in @(Get-ChildItem -LiteralPath $root -Directory -Filter 'app.*' -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+      # only our own leftovers: on Windows the pattern app.* would also match the app folder itself
+      foreach ($d in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'app.new' -or $_.Name -like 'app.old-*' })) { Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue }
       Copy-Item -LiteralPath $exe.DirectoryName -Destination $newDir -Recurse
     } finally {
       Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

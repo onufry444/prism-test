@@ -72,7 +72,7 @@ class Updater {
       const newDir = path.join(this.root, 'app.new');
       await this.ps(`$ErrorActionPreference = 'Stop'
         $root = ${psq(this.root)}; $new = ${psq(newDir)}; $x = ${psq(path.join(work, 'x'))}
-        Get-ChildItem -LiteralPath $root -Directory -Filter 'app.*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'app.new' -or $_.Name -like 'app.old-*' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Expand-Archive -LiteralPath ${psq(zip)} -DestinationPath $x -Force
         $exe = Get-ChildItem -LiteralPath $x -Filter 'Prism.exe' -Recurse | Select-Object -First 1
         if (-not $exe) { throw 'The download does not contain Prism.exe.' }

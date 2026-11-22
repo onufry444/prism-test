@@ -106,7 +106,7 @@ jobs:
           if (-not @(Get-Process -Name Prism -ErrorAction SilentlyContinue).Count) { Start-Process "$root\app\Prism.exe"; Start-Sleep -Seconds 6 }
           Get-Content ..\..\install.ps1 -Raw | Invoke-Expression
           if (-not (Test-Path "$root\app\engine\installer\prism.ps1")) { throw 'update over a running Prism broke the install' }
-          if (@(Get-ChildItem $root -Directory -Filter 'app.*').Count) { Write-Host 'leftover folders:'; Get-ChildItem $root -Directory -Filter 'app.*' }
+          $left = @(Get-ChildItem $root -Directory | Where-Object { $_.Name -ne 'app' -and $_.Name -like 'app*' }); if ($left.Count) { Write-Host "leftover folders: $($left.Name -join ', ')" }
           Write-Host 'update over a running Prism works'
           # the in-app updater's folder swap, with Prism running
           Start-Process "$root\app\Prism.exe"; Start-Sleep -Seconds 6
@@ -115,6 +115,10 @@ jobs:
           $work = Join-Path $env:RUNNER_TEMP 'upd-work'; New-Item -ItemType Directory $work -Force | Out-Null
           Get-Process -Name Prism -ErrorAction SilentlyContinue | Stop-Process -Force   # in the app, Prism quits by itself
           powershell -NoProfile -ExecutionPolicy Bypass -File "$env:RUNNER_TEMP\swap.ps1" -Root $root -Work $work -Version 9.9.9
+          Write-Host "swap exit code: $LASTEXITCODE"
+          $perr = $null; [void][System.Management.Automation.Language.Parser]::ParseFile("$env:RUNNER_TEMP\swap.ps1", [ref]$null, [ref]$perr); if ($perr) { Write-Host "swap.ps1 parse errors: $($perr -join '; ')" }
+          if (Test-Path "$root\update.log") { Get-Content "$root\update.log" }
+          Get-ChildItem $root | Format-Table Name
           $res = Get-Content "$root\update-result.json" -Raw | ConvertFrom-Json
           Write-Host "swap: $($res.message)"
           if (-not $res.ok) { throw "in-app update swap failed: $($res.message)" }
