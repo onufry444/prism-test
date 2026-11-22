@@ -1,0 +1,24 @@
+/* Prism dock. Override anything in ~/.config/prism/style.css (body.prism-dock ...). */
+:root { --size: 48px; --fg: #f2f2f5; --ac: #8ab4ff; --dock-bg: rgba(28, 30, 38, .52); --dock-border: rgba(255, 255, 255, .16); --dot: rgba(255, 255, 255, .85); }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; font: 12px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+.zone { position: fixed; left: 0; right: 0; bottom: 0; height: 3px; }
+.dock { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 6px;
+  padding: 6px 8px 7px; border-radius: 20px; background: var(--dock-bg); border: 1px solid var(--dock-border);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .08); transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s; }
+body.hidden .dock { transform: translate(-50%, calc(100% + 20px)); opacity: 0; }
+.item { position: relative; width: var(--size); height: var(--size); display: flex; align-items: flex-end; justify-content: center; border: 0; padding: 0; background: none; cursor: default; }
+.item img, .item .ph { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .3)); pointer-events: none; }
+.item .ph { display: grid; place-items: center; border-radius: 22%; background: linear-gradient(160deg, var(--ac), #4a5bdc); color: white; font-weight: 700; font-size: calc(var(--size) * .42); }
+.item .dot { position: absolute; bottom: -6px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--dot); opacity: 0; transition: opacity .2s; }
+.item.running .dot { opacity: .7; }
+.item.focused .dot { opacity: 1; width: 14px; margin-left: -7px; border-radius: 3px; background: var(--ac); }
+.tip { position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%) translateY(4px); padding: 4px 10px; border-radius: 7px; white-space: nowrap;
+  background: rgba(20, 22, 28, .86); color: var(--fg); border: 1px solid rgba(255, 255, 255, .12); font-size: 12.5px; opacity: 0; pointer-events: none; transition: .12s; }
+.item:hover .tip { opacity: 1; transform: translateX(-50%); }
+body.nolabels .tip { display: none; }
+.sep { width: 1px; align-self: stretch; margin: 4px 3px; background: rgba(255, 255, 255, .2); }
+.bounce { animation: bounce .7s ease-in-out 2; }
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-18px); } }
+.item:active img { filter: brightness(.75) drop-shadow(0 3px 5px rgba(0, 0, 0, .3)); }
+@media (prefers-reduced-motion: reduce) { .dock, .tip { transition: none; } .bounce { animation: none; } }

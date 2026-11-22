@@ -1,0 +1,17 @@
+{
+  "$schema": "./schema.json",
+  "id": "glass",
+  "name": "Glass",
+  "author": "Prism",
+  "version": "2.0.0",
+  "description": "macOS-style: a dock with magnification, a translucent menu bar, rounded windows and a dusk wallpaper.",
+  "colors": { "mode": "dark", "background": "#14161c", "surface": "#1e2129", "text": "#eceae4", "muted": "#9a9aa2", "accent": "#7aa7ff", "accent2": "#ff9f7a" },
+  "effects": { "transparency": true, "opacity": 74, "blur": true, "radius": 14 },
+  "fonts": { "mono": "Cascadia Code", "size": 14 },
+  "wallpaper": { "type": "gradient", "angle": 120, "colors": ["#1b2140", "#4b3a78", "#c46a7a", "#f2b38a"] },
+  "taskbar": { "alignment": "center" },
+  "windows": { "tiling": false, "corners": "rounded" },
+  "dock": { "enabled": true, "iconSize": 50, "magnification": 1.7, "autohide": false, "hideTaskbar": true, "labels": true, "showRunning": true },
+  "bar": { "enabled": true, "height": 30, "left": ["menu", "app"], "center": [], "right": ["cpu", "memory", "battery", "network", "clock"] },
+  "terminal": { "scheme": "prism" }
+}

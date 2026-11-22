@@ -1,0 +1,17 @@
+{
+  "$schema": "./schema.json",
+  "id": "paper",
+  "name": "Paper",
+  "author": "Prism",
+  "version": "2.0.0",
+  "description": "Light and calm: warm paper colors, a clean dock and menu bar, an airy wallpaper.",
+  "colors": { "mode": "light", "background": "#f6f3ec", "surface": "#e9e4d8", "text": "#2a2622", "muted": "#857d72", "accent": "#c2410c", "accent2": "#2f74d8" },
+  "effects": { "transparency": true, "opacity": 94, "blur": true, "radius": 12 },
+  "fonts": { "mono": "Cascadia Code", "size": 14 },
+  "wallpaper": { "type": "gradient", "angle": 160, "colors": ["#fbf7ef", "#efe3cf", "#d9c3a5"] },
+  "taskbar": { "alignment": "center" },
+  "windows": { "tiling": false, "corners": "rounded" },
+  "dock": { "enabled": true, "iconSize": 46, "magnification": 1.5, "autohide": false, "hideTaskbar": true, "labels": true, "showRunning": true },
+  "bar": { "enabled": true, "height": 28, "left": ["menu", "app"], "center": [], "right": ["battery", "network", "clock"] },
+  "terminal": { "scheme": "paper" }
+}

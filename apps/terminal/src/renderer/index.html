@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: file:">
@@ -7,51 +7,60 @@
 <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="settings.css">
+<style id="user-css"></style>
 </head>
-<body>
+<body class="prism-terminal">
 <div id="app">
   <header class="bar">
-    <span class="logo" aria-hidden="true"></span>
+    <button class="logo-btn" id="logo" title="Prism menu" aria-label="Prism menu"><span class="logo"></span></button>
     <div class="tabs" id="tabs"></div>
     <div class="newtab">
-      <button class="ic" id="add" title="Nowa karta (Ctrl+Shift+T)" aria-label="Nowa karta">+</button>
-      <button class="ic small" id="addMenu" title="Wybierz powłokę" aria-label="Wybierz powłokę">⌄</button>
+      <button class="ic" id="add" title="New tab" aria-label="New tab">+</button>
+      <button class="ic small" id="addMenu" title="Choose a shell" aria-label="Choose a shell">⌄</button>
       <div class="menu" id="profiles" hidden></div>
     </div>
     <div class="drag"></div>
-    <button class="ic" id="gear" title="Ustawienia (Ctrl+,)" aria-label="Ustawienia">
+    <button class="ic" id="gear" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
     <div class="wc" id="wc">
-      <button data-w="min" aria-label="Minimalizuj"><svg viewBox="0 0 10 10" width="10"><path d="M1 5h8" stroke="currentColor"/></svg></button>
-      <button data-w="max" aria-label="Maksymalizuj"><svg viewBox="0 0 10 10" width="10"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor"/></svg></button>
-      <button data-w="close" class="x" aria-label="Zamknij"><svg viewBox="0 0 10 10" width="10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor"/></svg></button>
+      <button data-w="min" aria-label="Minimize"><svg viewBox="0 0 10 10" width="10"><path d="M1 5h8" stroke="currentColor"/></svg></button>
+      <button data-w="max" aria-label="Maximize"><svg viewBox="0 0 10 10" width="10"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor"/></svg></button>
+      <button data-w="close" class="x" aria-label="Close"><svg viewBox="0 0 10 10" width="10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor"/></svg></button>
     </div>
   </header>
 
   <main id="terms"></main>
+  <div class="search" id="search" hidden>
+    <input id="searchInput" placeholder="Find" spellcheck="false" aria-label="Find in terminal">
+    <span id="searchCount"></span>
+    <button class="ic sm" id="searchPrev" title="Previous (Shift+Enter)" aria-label="Previous">↑</button>
+    <button class="ic sm" id="searchNext" title="Next (Enter)" aria-label="Next">↓</button>
+    <button class="ic sm" id="searchClose" title="Close (Esc)" aria-label="Close search">✕</button>
+  </div>
+  <div class="chip-tr" id="translated" role="status"></div>
 
-  <section id="settings" hidden aria-label="Ustawienia Prism">
+  <section id="settings" hidden aria-label="Prism settings">
     <nav class="snav" id="sNav"></nav>
     <div class="smain" id="sMain">
       <header class="shead">
         <div><h1 id="sTitle"></h1><p id="sSub"></p></div>
-        <button class="ic" id="sClose" title="Zamknij (Esc)" aria-label="Zamknij ustawienia">✕</button>
+        <button class="ic" id="sClose" title="Close (Esc)" aria-label="Close settings">✕</button>
       </header>
-      <div id="sTour"></div>
+      <div id="sNote"></div>
       <div class="sgrid">
         <div class="scontent" id="sContent"></div>
         <aside class="spv" id="sPreview"></aside>
       </div>
     </div>
   </section>
-
-  <aside id="tour" hidden aria-label="Samouczek"></aside>
   <div id="toast" role="status"></div>
 </div>
 <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+<script src="../../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+<script src="schemes.js"></script>
 <script src="renderer.js"></script>
 <script src="settings.js"></script>
 </body>

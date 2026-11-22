@@ -1,22 +1,24 @@
 {
   "name": "prism",
   "productName": "Prism",
-  "version": "0.2.0",
-  "description": "Terminal i centrum sterowania wyglądem Windowsa",
+  "version": "0.3.0",
+  "description": "A terminal that replaces the Windows terminal and restyles the whole desktop",
   "main": "src/main.js",
   "author": "onufry444",
   "license": "MIT",
   "homepage": "https://github.com/onufry444/prism",
   "scripts": {
     "start": "electron .",
-    "test": "node test/commands.test.js",
+    "test": "node test/translate.test.js && node test/shells.test.js",
     "dist": "electron-builder --win zip --x64 --publish never"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
     "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
     "@xterm/addon-web-links": "^0.11.0",
-    "@xterm/xterm": "^5.5.0"
+    "@xterm/xterm": "^5.5.0",
+    "koffi": "^2.9.0"
   },
   "devDependencies": {
     "electron": "^37.0.0",
@@ -25,18 +27,43 @@
   "build": {
     "appId": "io.github.onufry444.prism",
     "productName": "Prism",
-    "directories": { "output": "dist" },
-    "files": ["src/**", "package.json"],
-    "asarUnpack": ["node_modules/@lydell/**"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/@lydell/**",
+      "node_modules/koffi/**"
+    ],
     "extraFiles": [
-      { "from": "../../installer", "to": "engine/installer" },
-      { "from": "../../themes", "to": "engine/themes" }
+      {
+        "from": "../../installer",
+        "to": "engine/installer"
+      },
+      {
+        "from": "../../themes",
+        "to": "engine/themes"
+      }
     ],
     "win": {
-      "target": [{ "target": "zip", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "artifactName": "Prism-win-x64.${ext}"
     },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

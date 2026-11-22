@@ -1,0 +1,25 @@
+/* Prism menu bar. Override anything in ~/.config/prism/style.css (body.prism-bar ...). */
+:root { --fg: #eef0f6; --ac: #8ab4ff; --bar-bg: rgba(16, 18, 24, .42); --muted: rgba(238, 240, 246, .62); }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+body { font: 500 13px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--fg); }
+.menubar { height: 100vh; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 10px; background: var(--bar-bg); border-bottom: 1px solid rgba(255, 255, 255, .07); }
+.side { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.side.right { justify-content: flex-end; }
+.center { display: flex; align-items: center; gap: 6px; }
+.mod { display: inline-flex; align-items: center; gap: 6px; height: calc(100vh - 6px); padding: 0 9px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; white-space: nowrap; cursor: default; }
+button.mod:hover { background: rgba(255, 255, 255, .12); }
+.mod svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.logo { width: 15px; height: 15px; background: conic-gradient(from 210deg, var(--ac), #ff9f7a, var(--ac)); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.app b { font-weight: 700; }
+.app span { color: var(--muted); font-weight: 400; max-width: 32vw; overflow: hidden; text-overflow: ellipsis; }
+.wss { display: flex; gap: 3px; padding: 0 4px; }
+.ws { min-width: 22px; height: 20px; padding: 0 6px; border: 0; border-radius: 6px; background: rgba(255, 255, 255, .08); color: var(--muted); font: 600 11.5px/20px inherit; font-family: inherit; }
+.ws.has { color: var(--fg); }
+.ws.on { background: var(--ac); color: #0d0f14; }
+.ws:hover:not(.on) { background: rgba(255, 255, 255, .18); }
+.meter { display: inline-block; width: 26px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .18); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--fg); border-radius: 3px; }
+.num { font-variant-numeric: tabular-nums; color: var(--muted); }
+.clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+.warn { color: #ff8a80; }

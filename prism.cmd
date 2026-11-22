@@ -1,3 +1,3 @@
 @echo off
-rem Prism: uruchamia installer\prism.ps1 bez zmiany polityki wykonywania skryptow w systemie
+rem Prism engine from a source checkout (the installed version adds `prism` to PATH)
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0installer\prism.ps1" %*

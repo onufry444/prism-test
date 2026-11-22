@@ -1,15 +1,11 @@
-## Instalacja
+## Install
 
-Otwórz **PowerShell** (bez uprawnień administratora) i wklej:
+Open **PowerShell** (no admin rights needed) and paste:
 
 ```powershell
 irm https://raw.githubusercontent.com/onufry444/prism/main/install.ps1 | iex
 ```
 
-Prism uruchomi się sam i pokaże samouczek. W terminalu wpisz `settings`, żeby wybrać wygląd Windowsa.
+Prism starts right away. Type `settings` to pick a desktop theme, set up the dock and menu bar, or change anything else. Already installed? Run `prism update`.
 
-Masz już Prism? Wpisz `prism update`.
-
-## Uwaga
-
-Wymaga Windows 11 (64-bit). Aplikacja nie jest jeszcze podpisana cyfrowo, więc przy pierwszym uruchomieniu Windows SmartScreen może pokazać ostrzeżenie. Wtedy kliknij „Więcej informacji”, a potem „Uruchom mimo to”.
+Needs Windows 11 (64-bit) for desktop themes; the terminal also runs on Windows 10. The app is not code-signed yet, so Windows SmartScreen may warn on first launch: choose “More info”, then “Run anyway”.

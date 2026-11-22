@@ -1,0 +1,17 @@
+{
+  "$schema": "./schema.json",
+  "id": "midnight",
+  "name": "Midnight",
+  "author": "Prism",
+  "version": "2.0.0",
+  "description": "Minimal and dark: an auto-hiding dock, no menu bar, tiled windows with wide gaps.",
+  "colors": { "mode": "dark", "background": "#0b0d12", "surface": "#161a22", "text": "#d7dae0", "muted": "#6b7280", "accent": "#5eead4", "accent2": "#818cf8" },
+  "effects": { "transparency": true, "opacity": 80, "blur": true, "radius": 10 },
+  "fonts": { "mono": "Cascadia Code", "size": 14 },
+  "wallpaper": { "type": "gradient", "angle": 200, "colors": ["#0b0d12", "#111827", "#1e1b4b"] },
+  "taskbar": { "alignment": "center" },
+  "windows": { "tiling": true, "gaps": { "inner": 16, "outer": 24 }, "border": { "enabled": true, "focused": "accent", "inactive": "#20242e" }, "corners": "rounded", "inactiveOpacity": 90 },
+  "dock": { "enabled": true, "iconSize": 44, "magnification": 1.5, "autohide": true, "hideTaskbar": true, "labels": true, "showRunning": true },
+  "bar": { "enabled": false },
+  "terminal": { "scheme": "rosepine" }
+}

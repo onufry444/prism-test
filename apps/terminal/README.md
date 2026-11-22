@@ -1,15 +1,20 @@
-# Prism: aplikacja
+# Prism app
 
-Terminal (Electron + xterm.js + node-pty) z ustawieniami w tym samym oknie i samouczkiem przy pierwszym uruchomieniu. Instrukcja dla użytkowników jest w [README projektu](../../README.md).
+Electron + xterm.js + node-pty. The user guide is in the [project README](../../README.md).
 
 ```bash
 npm install
-npm start          # uruchomienie z kodu
-npm test           # test generatora komend (potrzebny bash)
-npm run dist       # paczka dist/Prism-win-x64.zip (na Windows)
+npm start        # run from source
+npm test         # translator and shell file tests (needs bash)
+npm run dist     # dist/Prism-win-x64.zip (on Windows)
 ```
 
-- `src/main.js`: okno, powłoki, motywy, uruchamianie `installer/prism.ps1`, test dymny (`Prism.exe --smoke wynik.json`)
-- `src/commands.js`: zamienia własne komendy na funkcje PowerShell, bash, zsh i makra cmd. Komendy Prism (`settings`, `krycie`…) wysyłają wiadomości przez folder `PRISM_INBOX`
-- `src/renderer/renderer.js`: karty, skróty, powitanie, samouczek
-- `src/renderer/settings.js`: ustawienia (motyw z podglądem, kolory, tapeta, okna, pasek, terminal, komendy)
+| File | What it does |
+|---|---|
+| `src/main.js` | windows, shells (pty), config changes, themes, the translation pipe, `--smoke` self-test |
+| `src/config.js` | defaults + Settings layer + `~/.config/prism/config.jsonc`, live reload |
+| `src/translate.js` | bash/cmd → PowerShell line translator |
+| `src/shells.js` | shell detection and startup files (PowerShell, bash, zsh, cmd) |
+| `src/shell/profile.ps1` | the Prism shell: Linux commands, translation on Enter, prompt |
+| `src/desktop.js`, `src/win32.js`, `src/glaze.js` | dock, menu bar, Windows API, GlazeWM workspaces |
+| `src/renderer/` | terminal window, settings, dock and menu bar pages |

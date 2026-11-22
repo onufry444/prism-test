@@ -1,89 +1,121 @@
 # Prism
 
-**Terminal, który zmienia wygląd całego Windowsa 11.** Zainstalujesz go jedną komendą. Wpisujesz `settings` i w tym samym oknie wybierasz albo tworzysz motyw: kolory, tapetę, kafelkowanie okien, ramki, pasek zadań. Do tego dochodzą własne komendy i przezroczysty terminal.
+**The terminal Windows should have shipped with, and a desktop you design yourself.**
 
-> *A Windows 11 terminal that restyles the whole system. One-line install, type `settings` for a mouse-friendly theme editor with live preview, custom commands, transparent terminal.*
+Prism replaces the Windows terminal and restyles the whole desktop: a macOS-style dock, a menu bar with workspaces, tiling windows like Hyprland, colors, wallpaper. One command installs it. Type `settings` to change anything with the mouse, or edit a config file like on Linux.
 
-[![Sprawdzenie](https://github.com/onufry444/prism/actions/workflows/check.yml/badge.svg)](https://github.com/onufry444/prism/actions/workflows/check.yml) [![Aplikacja](https://github.com/onufry444/prism/actions/workflows/app.yml/badge.svg)](https://github.com/onufry444/prism/actions/workflows/app.yml)
+[![Checks](https://github.com/onufry444/prism/actions/workflows/check.yml/badge.svg)](https://github.com/onufry444/prism/actions/workflows/check.yml) [![App](https://github.com/onufry444/prism/actions/workflows/app.yml/badge.svg)](https://github.com/onufry444/prism/actions/workflows/app.yml)
 
-## Instalacja
+## Install
 
-Otwórz **PowerShell** (zwykły, bez uprawnień administratora) i wklej:
+Open **PowerShell** (no admin rights needed) and paste:
 
 ```powershell
 irm https://raw.githubusercontent.com/onufry444/prism/main/install.ps1 | iex
 ```
 
-Prism pobierze się, zainstaluje i uruchomi. Przy pierwszym uruchomieniu zobaczysz powitanie i samouczek krok po kroku. Nic w wyglądzie Windowsa się nie zmieni, dopóki sam nie wybierzesz motywu.
+Prism opens right away. Later on, use the Start menu, press **Ctrl+Alt+T** anywhere, or type `prism` in any terminal.
 
-## Jak używać
+## Why switch
 
-W terminalu Prism wpisz:
+**One shell that understands everything.** The default Prism shell is PowerShell with the habits you bring from elsewhere:
 
-| Komenda | Co robi |
-|---|---|
-| `settings` | ustawienia w tym samym oknie, obsługiwane myszką: motywy z podglądem, kolory, tapeta, okna, pasek zadań, terminal, komendy |
-| `pomoc` | lista wszystkich komend |
-| `tutorial` | samouczek od nowa |
-| `krycie 60` | przezroczystość terminala |
-| `dodaj-komende hej "Cześć {1}!"` | własna komenda (potem: `hej Ola`) |
-
-W każdym terminalu, także zwykłym cmd czy PowerShell, działa komenda `prism`:
-
-| Komenda | Co robi |
-|---|---|
-| `prism` | otwiera Prism |
-| `prism settings` | otwiera Prism od razu w ustawieniach |
-| `prism apply kafel` | stosuje motyw bez otwierania ustawień |
-| `prism restore` | przywraca oryginalny wygląd Windowsa |
-| `prism update` | aktualizacja do najnowszej wersji |
-| `prism uninstall` | usuwa Prism (najpierw przywraca oryginalny wygląd) |
-
-## Bezpieczeństwo zmian
-
-Przy pierwszym zastosowaniu motywu Prism zapisuje kopię wszystkiego, co zmienia: wartości rejestru, tapety i plików konfiguracji. Przycisk „Przywróć oryginalny Windows” (albo `prism restore`) przywraca dokładnie ten stan. Prism zmienia tylko ustawienia Twojego konta i nie potrzebuje uprawnień administratora.
-
-## Co Prism zmienia i czym
-
-| Element | Jak |
-|---|---|
-| Tryb ciemny/jasny, przezroczystość, kolor akcentu, położenie ikon paska | rejestr Windowsa (tylko HKCU) |
-| Tapeta | generowana w 4K z kolorów motywu albo Twój obraz |
-| Kafelkowanie, odstępy, ramki, rogi, przezroczystość nieaktywnych okien | [GlazeWM](https://github.com/glzr-io/glazewm), instalowany przez winget tylko wtedy, gdy włączysz kafelkowanie |
-| Styl paska zadań | [Windhawk](https://windhawk.net) z modem Taskbar Styler. Na razie Prism podpowiada, co wybrać |
-| Terminal | Prism sam w sobie: PowerShell, cmd, Git Bash i WSL w kartach, przezroczyste tło, rozmycie pulpitu |
-
-Programy firm trzecich instalowane są z oficjalnych źródeł przez `winget` i mają własne licencje.
-
-**Uczciwie o ograniczeniach:** zmiany paska zadań działają przez podpinanie się pod Eksploratora Windows, więc duża aktualizacja systemu może je czasem zepsuć. `prism restore` działa zawsze.
-
-## Własne motywy
-
-Najprościej: `settings` → **Nowy motyw**. Zmieniasz kolory, tapetę i okna, patrzysz na podgląd i klikasz „Zastosuj w Windows”. Motywy zapisują się w `%LOCALAPPDATA%\Prism\themes` jako pliki `.json`, więc możesz się nimi dzielić. Format opisuje [themes/schema.json](themes/schema.json), a gotowe przykłady to [kafel.json](themes/kafel.json) i [szklo-dock.json](themes/szklo-dock.json).
-
-## Dla programistów
-
-```
-install.ps1             instalacja jedną komendą (pobiera wydanie z GitHub Releases)
-installer/prism.ps1     silnik: motywy, kopia i przywracanie, GlazeWM, aktualizacja, dezinstalacja
-themes/                 wbudowane motywy + schema.json
-apps/terminal/          aplikacja (Electron + xterm.js + node-pty): terminal, ustawienia, samouczek
-.github/workflows/      testy na Windows i budowanie wydań
+```bash
+ls -la ~/projects          # GNU flags, colored output
+rm -rf node_modules        # refuses to touch C:\, your home folder or Windows
+grep -rn TODO src          # recursive, line numbers, highlighted matches
+npm run build && npm test  # && and || even on Windows PowerShell 5.1
+export NODE_ENV=production # bash style
+echo %APPDATA% $PATH       # cmd and bash variables
+dir /s /b *.log            # cmd switches
+sudo !!                    # rerun the last command as administrator
+alias gs='git status'      # saved for every future session
 ```
 
-Uruchomienie z kodu: `cd apps/terminal`, potem `npm install` i `npm start`. Silnik bez aplikacji uruchomisz z folderu głównego: `prism apply kafel -DryRun`.
+These Linux commands work out of the box: `ls`, `rm`, `cp`, `mv`, `mkdir -p`, `touch`, `cat -n`, `grep`, `head`, `tail -f`, `wc`, `which`, `df -h`, `du -sh`, `free -h`, `uname -a`, `uptime`, `env`, `export`, `unset`, `sudo`, `open`, `pbcopy`, `pbpaste`, `ln -s`, `kill -9`, `killall`, `pgrep`, `ps aux`, `wget`, `less` and `man`. PowerShell parameters still go to the real cmdlets, so `ls -Recurse` works too.
 
-Każdy push sprawdzają testy na prawdziwym Windowsie: składnia, motywy, próbne zastosowanie, budowanie aplikacji i test dymny. Test dymny otwiera okno i ustawienia, w PowerShell, cmd i Git Bash uruchamia komendy, a na końcu sprawdza instalację i dezinstalację. Nowe wydanie powstaje samo, gdy podniesiesz wersję w `apps/terminal/package.json` i wyślesz zmianę na `main`.
+When a line uses bash or cmd syntax, Prism rewrites it before it runs and shows you what it did. Start a line with a space to run it exactly as typed. If you type a missing tool like `vim` or `htop`, Prism shows the `winget` command that installs it. PowerShell commands typed in Git Bash run in PowerShell.
 
-## Plan
+**A desktop that looks the way you want.**
 
-- [x] Format motywu, szablony, kopia i przywracanie
-- [x] Instalacja jedną komendą, ustawienia w terminalu z podglądem, samouczek
-- [ ] Własny pasek górny (zegar, pulpity GlazeWM, media)
-- [ ] Automatyczne ustawianie modów Windhawk, kursory, ikony, dźwięki
-- [ ] Galeria motywów od społeczności
-- [ ] `winget install Prism`
+| Theme | Look |
+|---|---|
+| `glass` | macOS: a dock with magnification, a translucent menu bar, rounded windows |
+| `tiles` | Hyprland: tiling windows, accent borders, gaps, a workspace bar |
+| `paper` | light and calm, dock and menu bar |
+| `midnight` | minimal dark, auto-hiding dock, tiled windows with wide gaps |
 
-## Licencja
+Pick a theme in `settings` and adjust its colors, wallpaper and windows with a live preview. Then click **Apply to Windows**. Your theme is a `.json` file you can share.
 
-MIT. Zobacz [LICENSE](LICENSE).
+**A terminal that is nice to use.** It has tabs, transparency and blur, and 10 color schemes (Tokyo Night, Catppuccin, Gruvbox, Nord, Dracula, Rosé Pine and more). The prompt is fast and shows the folder and git branch. You also get history suggestions as you type, Ctrl+Shift+F search, copy on select and a show/hide hotkey that works from anywhere.
+
+## Configure it like Linux
+
+Everything in Settings also lives in text files that reload when you save them:
+
+- `~/.config/prism/config.jsonc` holds every option, as JSON with comments. Values set here win over the Settings screen.
+- `~/.config/prism/style.css` is custom CSS for the terminal, the dock and the menu bar.
+- Your desktop themes are `.json` files in `%LOCALAPPDATA%\Prism\themes`.
+
+```jsonc
+{
+  "terminal": { "scheme": "catppuccin", "opacity": 80, "font": "\"JetBrains Mono\", monospace" },
+  "prompt": { "segments": ["userhost", "path", "git", "duration", "status"], "symbol": "λ" },
+  "dock": { "enabled": true, "iconSize": 56, "magnification": 2 },
+  "bar": { "enabled": true, "left": ["menu", "workspaces"], "center": ["clock"], "right": ["cpu", "memory", "battery"] },
+  "aliases": [ { "name": "proj", "body": "cd ~/projects/{1} && code ." } ],
+  "keys": { "toggleWindow": "Ctrl+Alt+T" }
+}
+```
+
+```css
+body.prism-dock .dock { border-radius: 26px; background: rgba(0, 0, 0, .35); }
+body.prism-bar .ws.on { background: #f5c2e7; }
+```
+
+## Commands
+
+In any terminal:
+
+| Command | What it does |
+|---|---|
+| `prism` | open Prism |
+| `prism settings` | open Prism in Settings |
+| `prism list` | list desktop themes |
+| `prism apply tiles` | apply a desktop theme |
+| `prism restore` | put the original Windows look back |
+| `prism update` | update Prism |
+| `prism uninstall` | remove Prism (restores the original look first) |
+
+These also work inside Prism: `settings`, `prism alias NAME CMD`, `prism unalias NAME`, `prism opacity 0-100`, `prism font-size N`, `prism scheme NAME` and `prism help`.
+
+## Safe to try
+
+The first time you apply a theme, Prism saves a backup of everything it changes: registry values, the wallpaper and the GlazeWM config. `prism restore` or the button in Settings puts it all back. Prism only changes settings for your user and needs no admin rights. The one exception is the first GlazeWM install for tiling, when Windows asks for permission. While the dock is on, the Windows taskbar auto-hides. Turning the dock off, quitting Prism or uninstalling brings it back.
+
+## What Prism uses
+
+| Part | How |
+|---|---|
+| Terminal | Electron, xterm.js, node-pty |
+| Dark/light mode, accent, transparency, wallpaper | Windows registry (current user only) |
+| Dock, menu bar | Prism itself (Windows API through koffi) |
+| Tiling, gaps, borders, corners | [GlazeWM](https://github.com/glzr-io/glazewm), installed only if a theme uses tiling |
+
+## For developers
+
+```
+install.ps1               one-line installer (downloads the GitHub release)
+installer/prism.ps1       engine: themes, backup/restore, GlazeWM, update, uninstall
+themes/                   built-in themes + schema.json
+apps/terminal/src/        the app: main.js, config.js, translate.js, shells.js, desktop.js, win32.js
+apps/terminal/src/shell/  the Prism shell profile for PowerShell and bash
+```
+
+To run from source, `cd apps/terminal`, then run `npm install` and `npm start`. Tests: `npm test` (translator and shell files), plus `test/profile.tests.ps1` on Windows.
+
+Every push runs on GitHub Actions with Windows Server 2025, which shares its build with Windows 11 24H2. CI builds the app and applies a tiling theme with GlazeWM. It then runs a self-test of the window, Settings, the dock, the menu bar, workspaces and each shell, and checks the one-line install and the uninstall. Raising the version in `apps/terminal/package.json` publishes a release.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
