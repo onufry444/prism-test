@@ -119,11 +119,11 @@ jobs:
           $perr = $null; [void][System.Management.Automation.Language.Parser]::ParseFile("$env:RUNNER_TEMP\swap.ps1", [ref]$null, [ref]$perr); if ($perr) { Write-Host "swap.ps1 parse errors: $($perr -join '; ')" }
           if (Test-Path "$root\update.log") { Get-Content "$root\update.log" }
           Get-ChildItem $root | Format-Table Name
-          $res = Get-Content "$root\update-result.json" -Raw | ConvertFrom-Json
-          Write-Host "swap: $($res.message)"
-          if (-not $res.ok) { throw "in-app update swap failed: $($res.message)" }
+          # the new Prism reads (and removes) update-result.json when it starts, so check the log
+          if ((Get-Content "$root\update.log" -Raw) -notmatch 'done') { throw 'in-app update swap failed' }
           if (-not (Test-Path "$root\app\Prism.exe")) { throw 'swap left no Prism' }
-          Remove-Item "$root\update-result.json"
+          if (-not @(Get-Process -Name Prism -ErrorAction SilentlyContinue).Count) { throw 'Prism did not start again after the update' }
+          Write-Host 'in-app update swap works'
           Start-Sleep -Seconds 4
           # uninstall typed inside a Prism tab: hands off to one new window, never loops
           $env:TERM_PROGRAM = 'Prism'
