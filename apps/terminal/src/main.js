@@ -392,7 +392,8 @@ ipcMain.handle('win:resize-start', e => { const w = BrowserWindow.fromWebContent
 ipcMain.on('win:resize', (e, edge, dx, dy) => {
   const w = BrowserWindow.fromWebContents(e.sender), b = resizeFrom.get(e.sender.id);
   if (!w || !b || w.isMaximized()) return;
-  const [minW, minH] = w.getMinimumSize();
+  // not getMinimumSize(): Windows reports the current size there for transparent windows
+  const minW = 560, minH = 360;
   let { x, y, width, height } = b;
   if (/e/.test(edge)) width = Math.max(minW, b.width + dx);
   if (/s/.test(edge)) height = Math.max(minH, b.height + dy);
