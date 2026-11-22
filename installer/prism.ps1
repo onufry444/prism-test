@@ -1,4 +1,4 @@
-﻿﻿#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   Prism engine: applies a desktop theme to Windows 11 and puts everything back on request.
