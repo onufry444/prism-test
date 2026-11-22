@@ -270,8 +270,12 @@ function prismState() {
 // ---------- terminal windows ----------
 function openTerminal({ show = true, settings = false } = {}) {
   const cfg = config.get();
+  // fit the screen space left by the taskbar, bar and dock, with a margin
+  const wa = screen.getPrimaryDisplay().workArea;
+  const width = Math.max(560, Math.min(1180, wa.width - 80)), height = Math.max(360, Math.min(740, wa.height - 60));
   const w = new BrowserWindow({
-    width: 1180, height: 740, minWidth: 560, minHeight: 360, show: false, title: 'Prism',
+    width, height, x: wa.x + Math.round((wa.width - width) / 2), y: wa.y + Math.round((wa.height - height) / 2),
+    minWidth: 560, minHeight: 360, show: false, title: 'Prism',
     frame: false, transparent: true, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
   });

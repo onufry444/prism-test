@@ -22,6 +22,7 @@ function load() {
       IsWindowVisible: user32.func('bool __stdcall IsWindowVisible(intptr hwnd)'),
       IsIconic: user32.func('bool __stdcall IsIconic(intptr hwnd)'),
       IsZoomed: user32.func('bool __stdcall IsZoomed(intptr hwnd)'),
+      GetWindowLongPtrW: user32.func('intptr __stdcall GetWindowLongPtrW(intptr hwnd, int index)'),
       GetWindow: user32.func('intptr __stdcall GetWindow(intptr hwnd, uint32 cmd)'),
       GetWindowLongPtrW: user32.func('intptr __stdcall GetWindowLongPtrW(intptr hwnd, int index)'),
       GetWindowThreadProcessId: user32.func('uint32 __stdcall GetWindowThreadProcessId(intptr hwnd, _Out_ uint32 *pid)'),
@@ -110,6 +111,8 @@ function fullscreenApp(own, bounds) {
   const fg = foreground(); if (!fg || own.has(fg)) return null;
   const cls = className(fg); if (SHELL_CLASSES.has(cls)) return null;
   if (load().IsZoomed(fg)) return null; // a maximized window is not a full-screen app
+  // full-screen apps drop their title bar; a big window that still has one is just big (WS_CAPTION)
+  if ((Number(load().GetWindowLongPtrW(fg, -16)) & 0x00C00000) === 0x00C00000) return null;
   const r = windowRect(fg);
   if (!r || r.left > bounds.left || r.top > bounds.top || r.right < bounds.right || r.bottom < bounds.bottom) return null;
   return { hwnd: fg, cls, rect: r };

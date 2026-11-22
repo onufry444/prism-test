@@ -163,7 +163,9 @@ class Desktop {
     if (this.bar) this.pushBar();
     // hide over full-screen apps (videos, games)
     const d = screen.getPrimaryDisplay(), sf = d.scaleFactor, b = d.bounds;
-    this.fullscreen = win32.fullscreenApp(this.ownHwnds(), { left: Math.round(b.x * sf), top: Math.round(b.y * sf), right: Math.round((b.x + b.width) * sf), bottom: Math.round((b.y + b.height) * sf) });
+    // Prism's own windows only count when they really are full screen (F11)
+    const mine = new Set(BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !w.isFullScreen()).map(win32.hwndOf));
+    this.fullscreen = win32.fullscreenApp(mine, { left: Math.round(b.x * sf), top: Math.round(b.y * sf), right: Math.round((b.x + b.width) * sf), bottom: Math.round((b.y + b.height) * sf) });
     const full = !!this.fullscreen;
     for (const w of [this.dock, this.bar]) if (w && !w.isDestroyed()) { if (full && w.isVisible()) w.hide(); else if (!full && !w.isVisible()) w.showInactive(); }
   }
