@@ -47,6 +47,8 @@ Beginning system scan.  This process will take some time.
 
 **Your default terminal.** Turn it on in Settings › Windows and every console app (cmd, PowerShell, Python, anything from winget) opens in a Prism tab, whether you start it from Start, Explorer or Win+R. Programs that fail keep their tab open with the exit code, so you can read the error. You can also add “Open in Prism” to folders and “Run in Prism” to programs and scripts in Explorer, or type `prism run <command>` in any terminal.
 
+**Toys, like on Linux.** `fetch` (system info with the Prism logo, like fastfetch), `lava` (a lava lamp, `t` changes colors), `matrix`, `pipes`, `donut`, `clock` and `visualizer` (bars that move with whatever your PC is playing, like cava). They work in PowerShell, cmd and Git Bash tabs; `q` quits. Settings can show `fetch` in every new tab.
+
 **Nice to use.** Tabs, transparency and blur, 10 color schemes (Tokyo Night, Catppuccin, Gruvbox, Nord, Dracula, Rosé Pine…), a fast prompt with folder and git branch, history suggestions while you type, Ctrl+Shift+F search, copy on select and a show/hide hotkey that works from anywhere.
 
 ## Configure it like Linux

@@ -67,6 +67,7 @@ $global:PrismConfig = @{
   linux = $${sh.linux !== false}
   predictions = $${sh.predictions !== false}
   adminAsk = $${(cfg.admin || {}).ask !== false}
+  fetchOnStart = $${!!sh.fetchOnStart}
   prompt = @{
     style = ${psq(p.style || 'auto')}
     segments = @(${seg})
@@ -178,6 +179,7 @@ function cmdInit(cmds, dir) {
     ['settings', msg('panel;$*')],
     // the command goes through an environment variable so its quotes and & survive
     ['sudo', `set "PRISM_SUDO=$*" & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "${path.join(dir, 'elevate.ps1')}" -Kind cmd`],
+    ...['fetch', 'lava', 'matrix', 'pipes', 'donut', 'clock', 'visualizer', 'cava', 'toys'].map(t => [t, `powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "${path.join(dir, 'elevate.ps1')}" -Toy ${t} $*`]),
     ['aliases', echoLines(listing(cmds))]
   ];
   return ['@chcp 65001 >nul', '@prompt $E[1;34m$P$E[0m$_$E[32m$G$E[0m ', ...defs.map(([n, m]) => batchDef(n, m))].join('\r\n') + '\r\n';

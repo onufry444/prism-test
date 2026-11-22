@@ -38,6 +38,19 @@ if [ -n "$PRISM_TAB" ] && { [ "$OSTYPE" = msys ] || [ "$OSTYPE" = cygwin ]; } &&
   }
 fi
 
+# toys (fetch, lava, matrix, pipes, donut, clock, visualizer): Prism draws them in this tab
+if [ -n "$PRISM_TAB" ] && { [ "$OSTYPE" = msys ] || [ "$OSTYPE" = cygwin ]; } && command -v powershell.exe >/dev/null 2>&1; then
+  __prism_toy() {
+    local s="$__TC_DIR/elevate.ps1"
+    command -v cygpath >/dev/null 2>&1 && s=$(cygpath -w "$s")
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$s" -Toy "$@"
+  }
+  for __t in fetch lava matrix pipes donut clock visualizer cava toys; do
+    type -P "$__t" >/dev/null 2>&1 || eval "$__t() { __prism_toy $__t \"\$@\"; }"
+  done
+  unset __t
+fi
+
 # `alias name=value` in bash also saves the alias in Prism, so it survives restarts
 alias() {
   if [ $# -eq 0 ]; then builtin alias; return; fi

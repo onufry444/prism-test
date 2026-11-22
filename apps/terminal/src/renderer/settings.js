@@ -155,6 +155,8 @@ function secShell() {
       + toggle('data-c', 'shell.translateNotify', 'Show what was translated')
       + toggle('data-c', 'shell.linux', 'Linux commands in PowerShell', '<code class="k">ls -la</code> <code class="k">rm -rf</code> <code class="k">grep -rn</code> <code class="k">touch</code> <code class="k">which</code> <code class="k">head</code> <code class="k">tail</code> <code class="k">df -h</code> <code class="k">free -h</code> <code class="k">sudo</code>…')
       + toggle('data-c', 'shell.predictions', 'Suggestions from history while you type', 'PowerShell 7. Press → to accept.'))
+    + group('Toys', toggle('data-c', 'shell.fetchOnStart', 'Show system info in new tabs', 'Like fastfetch in a Linux .bashrc (Prism shell).')
+      + '<p class="note">Try <code class="k">fetch</code> <code class="k">lava</code> <code class="k">matrix</code> <code class="k">pipes</code> <code class="k">donut</code> <code class="k">clock</code> <code class="k">visualizer</code> in any tab. <code class="k">q</code> quits, <code class="k">t</code> changes the lava colors.</p>')
     + group('Prompt', seg('data-c', 'prompt.style', [['auto', 'Auto'], ['prism', 'Prism'], ['keep', 'Keep mine']], 'Style') + '<p class="note">Auto keeps oh-my-posh or Starship if you use them. Changes show in new tabs and after the next command.</p>'
       + `<div class="field"><span>Segments, in order${lock('prompt.segments')}</span>${chips('prompt.segments', SEGMENTS, p.segments || [])}</div>`
       + text('data-c', 'prompt.symbol', 'Symbol', '', '❯') + toggle('data-c', 'prompt.newline', 'Type on a new line') + toggle('data-c', 'prompt.blankLine', 'Blank line between commands')

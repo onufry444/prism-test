@@ -1,4 +1,4 @@
-﻿# Prism shell profile for Windows PowerShell 5.1 and PowerShell 7.
+# Prism shell profile for Windows PowerShell 5.1 and PowerShell 7.
 # Loaded by init.ps1 after your own $PROFILE. Settings come from $global:PrismConfig (config.ps1).
 #
 # - Linux commands with GNU flags: ls -la, rm -rf, cp -r, mkdir -p, grep -rn, touch, which, head, tail, wc,
@@ -610,6 +610,13 @@ function global:__prism_admin_retry([bool]$ok, $code) {
   __prism_elevate pwsh $line
 }
 
+# ------------------------------------------------------------------ toys (drawn by Prism in this tab)
+foreach ($t in 'fetch', 'lava', 'matrix', 'pipes', 'donut', 'clock', 'visualizer', 'cava', 'toys') {
+  if (-not (Get-Command $t -CommandType Application -ErrorAction SilentlyContinue)) {
+    Set-Item -Path "function:global:$t" -Value ([scriptblock]::Create("__prism_toy '$t' `$args"))
+  }
+}
+
 # ------------------------------------------------------------------ Prism commands
 function global:__prism_msg([string]$s) {
   if ($env:PRISM_INBOX -and (Test-Path -LiteralPath $env:PRISM_INBOX)) {
@@ -748,3 +755,5 @@ function global:__prism_tick {
 }
 # errors from loading the profile are not a reason to offer admin rights
 $global:__PrismLastErr = $global:Error[0]
+# a fetch greeting in new tabs (Settings > Shell & prompt)
+if ($global:PrismConfig.fetchOnStart -and $env:PRISM_TAB -and (Get-Command fetch -CommandType Function -ErrorAction SilentlyContinue)) { fetch }

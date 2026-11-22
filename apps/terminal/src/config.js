@@ -41,6 +41,8 @@ const DEFAULTS = {
     default: 'prism',
     translate: true,
     translateNotify: true,
+    // show system info (fetch) when a new Prism tab opens, like fastfetch in a .bashrc
+    fetchOnStart: false,
     linux: true,
     predictions: true
   },

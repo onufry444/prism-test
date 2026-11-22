@@ -23,6 +23,7 @@ const { Config, CONFIG_FILE, STYLE_FILE, CONFIG_DIR, ensureFiles } = require('./
 const { translate, needsAdmin, sudoRest } = require('./translate');
 const { Elevator } = require('./elevate');
 const { startHandoffServer } = require('./handoff');
+const { Toys } = require('./toys');
 const { Integration, runSpecForFile } = require('./integrate');
 const psq = s => "'" + String(s).replace(/'/g, "''") + "'";
 
@@ -45,7 +46,7 @@ const ELEVATED = IS_WIN && win32.isElevated() && !process.env.PRISM_TEST_ELEVATE
 const config = new Config(path.join(DATA, 'settings.json'));
 const ptys = new Map(); // tab id -> { p, wc, profile, cols, rows }
 const PROFILES = shells.detectProfiles();
-let elevator = null;
+let elevator = null, toys = null;
 let quitting = false;
 
 const terminals = () => BrowserWindow.getAllWindows().filter(w => w.prismTerminal && !w.isDestroyed());
@@ -93,7 +94,7 @@ function attach(id, p, wc, profile, cols, rows, hold) {
   ptys.set(id, t);
   p.onData(data => { if (!wc.isDestroyed()) wc.send('pty:data', { id, data }); });
   p.onExit(({ exitCode }) => {
-    elevator?.kill(id);
+    elevator?.kill(id); toys?.stop(id);
     if (wc.isDestroyed()) return ptys.delete(id);
     if (hold === 'always' || (hold === 'error' && exitCode)) {
       t.ended = true;
@@ -164,7 +165,10 @@ function onShellMessage(msg) {
   if (SMOKE_OUT) smokeMsgs.push(msg);
   const i = msg.indexOf(';'), cmd = i < 0 ? msg : msg.slice(0, i), arg = i < 0 ? '' : msg.slice(i + 1).trim();
   const cfg = config.get();
-  if (cmd === 'elevate') { let req; try { req = JSON.parse(Buffer.from(arg, 'base64').toString('utf8')); } catch { return; } elevator.start(req); }
+  if (cmd === 'elevate' || cmd === 'toy') {
+    let req; try { req = JSON.parse(Buffer.from(arg, 'base64').toString('utf8')); } catch { return; }
+    if (cmd === 'elevate') elevator.start(req); else toys.start(req);
+  }
   else if (cmd === 'add') {
     try {
       const [type, name, ...body] = Buffer.from(arg, 'base64').toString('utf8').split('\t');
@@ -354,14 +358,16 @@ ipcMain.handle('pty:adopt', (e, id, cols, rows) => {
   con.resize(cols, rows);
   return { ok: true, profile };
 });
-ipcMain.on('pty:write', (e, id, d) => { if (endHeld(id)) return; if (!elevator?.input(id, d)) ptys.get(id)?.p.write(d); });
+// while sudo or a toy runs in a tab, its keys go there instead of the shell
+ipcMain.on('pty:write', (e, id, d) => { if (endHeld(id)) return; if (toys?.input(id, d)) return; if (!elevator?.input(id, d)) ptys.get(id)?.p.write(d); });
 ipcMain.on('pty:resize', (e, id, c, r) => {
   const t = ptys.get(id); if (!t) return;
   t.cols = c; t.rows = r;
   try { t.p.resize(Math.max(c, 2), Math.max(r, 2)); } catch {}
   elevator?.resize(id, c, r);
+  toys?.resize(id, c, r);
 });
-ipcMain.on('pty:kill', (e, id) => { elevator?.kill(id); try { ptys.get(id)?.p.kill(); } catch {} ptys.delete(id); });
+ipcMain.on('pty:kill', (e, id) => { toys?.stop(id); elevator?.kill(id); try { ptys.get(id)?.p.kill(); } catch {} ptys.delete(id); });
 ipcMain.handle('app:pick-image', async e => {
   const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'] }] });
   return r.canceled ? null : r.filePaths[0];
@@ -407,6 +413,34 @@ function applyIntegration(force) {
 }
 ipcMain.handle('integration:status', () => integration ? integration.status() : null);
 
+// What your PC is playing, for the visualizer: a hidden window records the system sound ("loopback")
+// and sends the loudness of 96 frequency bands about 30 times a second. Nothing is saved or sent anywhere.
+function startAudio(onBands, onError) {
+  if (!IS_WIN) { onError('The visualizer needs Windows (it records what the PC is playing).'); return () => {}; }
+  const { session, desktopCapturer } = require('electron');
+  const ses = session.fromPartition('prism-audio');
+  ses.setDisplayMediaRequestHandler((req, cb) => {
+    desktopCapturer.getSources({ types: ['screen'] }).then(src => cb(src.length ? { video: src[0], audio: 'loopback' } : {})).catch(() => cb({}));
+  });
+  const w = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { session: ses, preload: path.join(__dirname, 'renderer', 'audio-preload.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  const onB = (e, b) => { if (e.sender === w.webContents && Array.isArray(b)) onBands(b); };
+  const onE = (e, m) => { if (e.sender === w.webContents) onError(String(m)); };
+  ipcMain.on('audio:bands', onB); ipcMain.on('audio:error', onE);
+  w.loadFile(path.join(__dirname, 'renderer', 'audio.html')).then(() => w.webContents.executeJavaScript('start()', true)).catch(e => onError(e.message));
+  return () => { ipcMain.removeListener('audio:bands', onB); ipcMain.removeListener('audio:error', onE); if (!w.isDestroyed()) w.destroy(); };
+}
+function startToys() {
+  toys = new Toys({
+    resultsDir: RESULTS,
+    version: app.getVersion(),
+    display: () => { const d = screen.getPrimaryDisplay(); return `${Math.round(d.size.width * d.scaleFactor)}x${Math.round(d.size.height * d.scaleFactor)}${d.scaleFactor !== 1 ? ` (scaled ${Math.round(d.scaleFactor * 100)}%)` : ''}`; },
+    audio: startAudio,
+    tab: id => {
+      const t = ptys.get(id);
+      return t && { cols: t.cols, rows: t.rows, profile: t.profile, send: data => { if (!t.wc.isDestroyed()) t.wc.send('pty:data', { id, data }); } };
+    }
+  });
+}
 function startElevator() {
   elevator = new Elevator({
     exe: process.execPath,
@@ -436,7 +470,7 @@ function runPty(profile, lines, firstWait) {
     p.onExit(finish);
     (async () => {
       await wait(firstWait);
-      for (const l of lines) { const [text, ms] = Array.isArray(l) ? l : [l, 2500]; if (!elevator.input(id, text + '\r')) p.write(text + '\r'); await wait(ms); }
+      for (const l of lines) { const [text, ms] = Array.isArray(l) ? l : [l, 2500]; if (!toys.input(id, text) && !elevator.input(id, text + '\r')) p.write(text + '\r'); await wait(ms); }
       setTimeout(finish, 3000);
     })();
     setTimeout(finish, 240000);
@@ -498,6 +532,17 @@ async function runSmoke() {
         check(`${prof.name}: prompt`, plain.includes('❯'), plain.slice(-600));
       }
     }
+
+    // toys: fetch prints through the shell, animations draw in the tab and stop on q
+    for (const prof of testable.filter(p => p.kind === 'pwsh' || p.kind === 'cmd').slice(0, 2)) {
+      const out = await runPty(prof, [['fetch', 6000], ['lava', 3000], ['q', 2500], ['matrix', 2500], ['q', 2500], ['visualizer', 5000], ['q', 2500], ['echo AFTER_TOYS', 2500], 'exit'], prof.kind === 'pwsh' ? 7000 : 3000);
+      const plain = plainOf(out);
+      check(`${prof.name}: fetch`, /Terminal: Prism/.test(plain) && /Memory: /.test(plain), plain.slice(0, 3000));
+      check(`${prof.name}: lava draws and quits`, /t theme · q quit/.test(plain) && (out.match(/\x1b\[\?1049l/g) || []).length >= 2, plain.slice(-1500));
+      check(`${prof.name}: visualizer starts`, /Listening|Play some music|sound|Audio/.test(plain), plain.slice(-1500));
+      check(`${prof.name}: shell works after toys`, /AFTER_TOYS/.test(plain.split('echo AFTER_TOYS').pop() || ''), plain.slice(-800));
+    }
+    check('toys: nothing left running', toys.sessions.size === 0, [...toys.sessions.keys()]);
 
     // 3. a tab that runs one program, and stays open with its exit code
     {
@@ -592,6 +637,7 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     watchInbox();
     startPipe();
     startElevator();
+    startToys();
     startIntegration();
     config.onChange(() => onConfigChanged());
     if (SMOKE_OUT) return runSmoke();
