@@ -34,7 +34,7 @@ const ok = shells.writeAll(dir, cfg, path.join(__dirname, '..', 'src', 'shell'),
 assert.deepStrictEqual(ok.map(c => c.name), ['hello', 'two', 'll', 'up'], 'invalid and reserved names are skipped');
 
 const input = ['hello Ann Bob', 'two X', 'type ll | head -3', 'll_out=$(declare -f ll); echo "$ll_out" | grep -c "ls -la \\"\\$@\\""',
-  'prism alias', 'settings dock', 'prism alias gc "git commit -m"', 'Get-Nothing-Here', 'echo "PS1 set: ${PS1:+yes}"', 'exit', ''].join('\n');
+  'prism alias', 'settings keys', 'prism alias gc "git commit -m"', 'Get-Nothing-Here', 'echo "PS1 set: ${PS1:+yes}"', 'exit', ''].join('\n');
 let out;
 try {
   out = execFileSync('bash', ['--rcfile', path.join(dir, 'init.bash'), '-i'], { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, HOME: dir, PRISM_INBOX: inbox } });
@@ -47,7 +47,7 @@ assert.match(out, /hello\s+echo: Hello/);
 assert.match(out, /PS1 set: yes/);
 const msgs = fs.readdirSync(inbox).map(f => fs.readFileSync(path.join(inbox, f), 'utf8').trim()).sort();
 console.log('messages:', msgs);
-assert.ok(msgs.includes('panel;dock'));
+assert.ok(msgs.includes('panel;keys'));
 const add = msgs.find(m => m.startsWith('add;'));
 assert.strictEqual(Buffer.from(add.slice(4), 'base64').toString(), 'run\tgc\tgit commit -m');
 

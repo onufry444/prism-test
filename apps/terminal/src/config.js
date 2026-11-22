@@ -5,7 +5,7 @@
 //   1. DEFAULTS (below)
 //   2. settings.json in the app data folder: what you change in the Settings screen
 //   3. ~/.config/prism/config.jsonc: your own file, never rewritten by Prism (comments are kept)
-// Plus ~/.config/prism/style.css: CSS loaded into the terminal, dock and menu bar.
+// Plus ~/.config/prism/style.css: CSS loaded into the terminal window.
 // Both files reload live when saved.
 const fs = require('fs');
 const path = require('path');
@@ -67,26 +67,11 @@ const DEFAULTS = {
     zoomIn: 'Ctrl+=', zoomOut: 'Ctrl+-', zoomReset: 'Ctrl+0', newWindow: 'Ctrl+Shift+N',
     toggleWindow: 'Ctrl+Alt+T'
   },
-  dock: {
-    enabled: false,
-    position: 'bottom',
-    iconSize: 48,
-    magnification: 1.6,
-    autohide: false,
-    hideTaskbar: true,
-    reserveSpace: true,
-    showRunning: true,
-    labels: true,
-    pinned: null
-  },
-  bar: {
-    enabled: false,
-    height: 30,
-    reserveSpace: true,
-    left: ['menu', 'workspaces', 'app'],
-    center: ['clock'],
-    right: ['cpu', 'memory', 'battery', 'network'],
-    clockFormat: 'ddd d MMM  HH:mm'
+  admin: {
+    // ask before running a command that needs administrator rights, then run it elevated
+    ask: true,
+    // inline: the elevated command runs in the same tab | window: in its own console window
+    mode: 'inline'
   },
   startup: { launchAtLogin: false, restoreTabs: false }
 };
@@ -171,37 +156,23 @@ const CONFIG_TEMPLATE = `// Prism configuration. Anything set here wins over the
 
   // "keys": { "newTab": "Ctrl+Shift+T", "settings": "Ctrl+,", "toggleWindow": "Ctrl+Alt+T" },
 
-  // "dock": {
-  //   "enabled": true,
-  //   "iconSize": 48,
-  //   "magnification": 1.6,             // 1 = off
-  //   "autohide": false,
-  //   "hideTaskbar": true,              // hide the Windows taskbar while the dock is on
-  //   "pinned": [ { "name": "Files", "path": "C:/Windows/explorer.exe" } ]
+  // "admin": {
+  //   "ask": true,                      // offer to re-run commands that failed for lack of admin rights
+  //   "mode": "inline"                  // inline (same tab) | window (separate console window)
   // },
 
-  // "bar": {
-  //   "enabled": true,
-  //   "height": 30,
-  //   "left": ["menu", "workspaces", "app"],
-  //   "center": ["clock"],
-  //   "right": ["cpu", "memory", "battery", "network"],
-  //   "clockFormat": "ddd d MMM  HH:mm"
-  // }
+  // "startup": { "launchAtLogin": false }
 }
 `;
 
-const STYLE_TEMPLATE = `/* Prism custom CSS. Loaded into the terminal, the dock and the menu bar; reloads when you save.
+const STYLE_TEMPLATE = `/* Prism custom CSS. Loaded into every Prism window; reloads when you save.
    Useful selectors:
-     body.prism-terminal   .bar  .tab  .tab.on  #terms  #settings
-     body.prism-dock       .dock  .item  .item.running  .item .dot  .tip
-     body.prism-bar        .menubar  .mod  .ws  .ws.on  .clock
+     body.prism-terminal  .bar  .tab  .tab.on  .tab.admin  #terms  .term  #settings  .palette
    Variables: --fg --bg --ac --solid --mono
 
    Examples:
-   body.prism-dock .dock { border-radius: 14px; }
-   body.prism-bar .menubar { background: rgba(10, 10, 14, .55); }
    body.prism-terminal .tab.on { background: var(--ac); color: var(--solid); }
+   body.prism-terminal .tab.admin { box-shadow: inset 0 -2px 0 #ff6b7f; }
 */
 `;
 
@@ -229,6 +200,7 @@ class Config {
     try { this.user = parseJsonc(fs.readFileSync(CONFIG_FILE, 'utf8')); this.error = null; }
     catch (e) { if (e.code !== 'ENOENT') this.error = `config.jsonc: ${e.message}`; }
     try { this.css = fs.readFileSync(STYLE_FILE, 'utf8'); } catch { this.css = ''; }
+    for (const old of ['dock', 'bar']) { delete this.gui[old]; delete this.user[old]; }
     this.value = merge(merge(clone(DEFAULTS), this.gui), this.user);
     if (!Array.isArray(this.value.aliases)) this.value.aliases = [];
     this.overridden = leafPaths(this.user);
@@ -239,8 +211,6 @@ class Config {
   setGui(patch) {
     this.gui = merge(this.gui, patch);
     if (Array.isArray(patch.aliases)) this.gui.aliases = patch.aliases;
-    if (patch.dock && 'pinned' in patch.dock) this.gui.dock.pinned = patch.dock.pinned;
-    if (patch.bar) for (const k of ['left', 'center', 'right']) if (Array.isArray(patch.bar[k])) this.gui.bar[k] = patch.bar[k];
     if (patch.prompt && Array.isArray(patch.prompt.segments)) this.gui.prompt.segments = patch.prompt.segments;
     fs.mkdirSync(path.dirname(this.settingsFile), { recursive: true });
     this.lastWritten = JSON.stringify(this.gui, null, 2);

@@ -3,7 +3,7 @@
 #   irm https://raw.githubusercontent.com/onufry444/prism/main/install.ps1 | iex
 #
 # Downloads the latest release from GitHub, installs it in %LOCALAPPDATA%\Prism, adds the `prism` command
-# and a Start menu shortcut, then starts Prism. Nothing about the look of Windows changes until you pick a theme.
+# and a Start menu shortcut, then starts Prism. Nothing else on your PC changes; `prism uninstall` removes it all.
 
 & {
   $ErrorActionPreference = 'Stop'
@@ -20,11 +20,10 @@
 
   try {
     Write-Host ''
-    Write-Host '  Prism' -ForegroundColor Magenta -NoNewline; Write-Host '  a better terminal, and a desktop you design yourself' -ForegroundColor DarkGray
+    Write-Host '  Prism' -ForegroundColor Magenta -NoNewline; Write-Host '  one terminal for PowerShell, cmd and bash' -ForegroundColor DarkGray
     Write-Host ''
     if ($env:OS -ne 'Windows_NT') { throw 'Prism runs on Windows.' }
     if (-not [Environment]::Is64BitOperatingSystem) { throw 'Prism needs 64-bit Windows.' }
-    if ([Environment]::OSVersion.Version.Build -lt 22000) { Say 'Note: desktop themes need Windows 11. The terminal works on Windows 10 too.' 'Yellow' }
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('prism-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -91,7 +90,7 @@
     Write-Host ''
     Say 'Prism is installed.' 'Green'
     Say 'Open it from the Start menu, with Ctrl+Alt+T, or by typing:  prism'
-    Say 'Inside Prism, type  settings  to change how Windows looks.'
+    Say 'Inside Prism, type  settings  to make it yours. No need to run it as admin: sudo works.'
     Say 'Update: prism update    Remove: prism uninstall' 'DarkGray'
     Write-Host ''
     if (-not $env:PRISM_NO_LAUNCH) { Start-Process -FilePath (Join-Path $appDir 'Prism.exe') }

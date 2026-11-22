@@ -105,7 +105,7 @@ function closeTab(t, fromExit) {
   if (P.active === t) activate(P.tabs[Math.min(i, P.tabs.length - 1)]); else renderTabs();
 }
 function renderTabs() {
-  $('#tabs').innerHTML = P.tabs.map((t, i) => `<button class="tab${t === P.active ? ' on' : ''}" data-i="${i}" title="${esc(t.title)}"><span class="t">${esc(t.title)}</span><span class="x" data-x="${i}" aria-label="Close tab">×</span></button>`).join('');
+  $('#tabs').innerHTML = P.tabs.map((t, i) => `<button class="tab${t === P.active ? ' on' : ''}${t.admin || P.elevated ? ' admin' : ''}" data-i="${i}" title="${esc(t.title)}${t.admin ? ' (running as administrator)' : ''}">${t.admin || P.elevated ? '<span class="sh" aria-label="administrator">⚡</span>' : ''}<span class="t">${esc(t.title)}</span><span class="x" data-x="${i}" aria-label="Close tab">×</span></button>`).join('');
 }
 P.typeInActive = text => { if (!P.active) return; P.closeSettings?.(); api.write(P.active.id, text); P.active.term.focus(); };
 $('#tabs').addEventListener('mousedown', e => {
@@ -190,9 +190,10 @@ $('#gear').addEventListener('click', () => P.toggleSettings());
 api.onWinState(m => document.body.classList.toggle('maxed', m));
 api.onData(({ id, data }) => P.tabs.find(t => t.id === id)?.term.write(data));
 api.onExit(({ id }) => closeTab(P.tabs.find(t => t.id === id), true));
+api.onAdmin(({ id, on }) => { const t = P.tabs.find(x => x.id === id); if (t) { t.admin = on; renderTabs(); } });
 
 api.init().then(async C => {
-  P.C = C; P.cfg = C.config; P.profiles = C.profiles; P.translateAvailable = C.translateAvailable; P.version = C.version;
+  P.C = C; P.cfg = C.config; P.profiles = C.profiles; P.translateAvailable = C.translateAvailable; P.version = C.version; P.elevated = C.elevated;
   $('#profiles').innerHTML = P.profiles.map(p => `<button data-id="${esc(p.id)}">${esc(p.name)}<small>${p.prism ? 'PowerShell + Linux commands' : p.kind === 'other' ? '' : esc(p.kind)}</small></button>`).join('');
   applyLook();
   await P.newTab();

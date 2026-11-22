@@ -1,8 +1,8 @@
 {
   "name": "prism",
   "productName": "Prism",
-  "version": "0.3.0",
-  "description": "A terminal that replaces the Windows terminal and restyles the whole desktop",
+  "version": "0.4.0",
+  "description": "A universal terminal for Windows: PowerShell, cmd and bash in one, admin rights per command, configured like Linux",
   "main": "src/main.js",
   "author": "onufry444",
   "license": "MIT",
@@ -42,10 +42,6 @@
       {
         "from": "../../installer",
         "to": "engine/installer"
-      },
-      {
-        "from": "../../themes",
-        "to": "engine/themes"
       }
     ],
     "win": {

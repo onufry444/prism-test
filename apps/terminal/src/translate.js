@@ -277,4 +277,46 @@ function translate(input, opts = {}) {
   return res;
 }
 
-module.exports = { translate, _internal: { splitTop, words, translateVars } };
+// ---------- administrator rights ----------
+// Commands that always need administrator rights on Windows. Prism asks before running them
+// (instead of letting them fail with "Access denied"). Help requests (/?, -?, --help) are left alone.
+const ADMIN_RULES = [
+  /^sfc(\.exe)?\s+\/(scannow|verifyonly|scanfile|verifyfile)/i,
+  /^dism(\.exe)?\s+\/online\b/i,
+  /^chkdsk(\.exe)?\b.*\s\/[frxb]\b/i,
+  /^(diskpart|bcdedit|bootrec|bcdboot|manage-bde|vssadmin|winsat)(\.exe)?\b/i,
+  /^fsutil(\.exe)?\s+(behavior\s+set|dirty\s+set|repair|resource)\b/i,
+  /^choco(\.exe)?\s+(install|upgrade|uninstall|update|pin|feature|source|apikey)\b/i,
+  /^(enable|disable)-windowsoptionalfeature\b/i,
+  /^(add|remove)-windowscapability\b/i,
+  /^(install|uninstall|add|remove)-windowsfeature\b/i,
+  /^repair-windowsimage\b/i,
+  /^set-executionpolicy\b(?![^;|]*-scope\s+(currentuser|process)\b)/i,
+  /^netsh(\.exe)?\s+(advfirewall|winsock\s+reset|int(erface)?\s+(ip|ipv4|ipv6)\s+(reset|set|add|delete))/i,
+  /^(new|remove|set|enable|disable)-netfirewallrule\b/i,
+  /^(new|remove)-service\b/i,
+  /^sc(\.exe)?\s+(create|delete|config|failure|sdset)\b/i,
+  /^net(\.exe)?\s+(user|localgroup)\s+.*\/(add|delete|del|active)/i,
+  /^net(\.exe)?\s+(start|stop)\s+\S/i,
+  /^reg(\.exe)?\s+(add|delete|import|restore|load|unload)\s+"?(hklm|hkey_local_machine|hkcr|hkey_classes_root|hku|hkey_users)\b/i,
+  /^powercfg(\.exe)?\s+[-\/](h|hibernate)\b/i,
+  /^w32tm(\.exe)?\s+\/(resync|config|register|unregister)/i,
+  /^(set|add|remove)-mppreference\b/i,
+  /^(checkpoint-computer|enable-computerrestore|disable-computerrestore)\b/i,
+  /^takeown(\.exe)?\b/i
+];
+function needsAdmin(line) {
+  const text = String(line || '');
+  if (/(^|\s)(\/\?|-\?|--help|-help)(\s|$)/i.test(text)) return false;
+  return splitTop(text).some(p => {
+    const c = p.cmd.trim().replace(/^&\s*/, '').replace(/^["']|["'](?=\s|$)/g, '');
+    return ADMIN_RULES.some(r => r.test(c));
+  });
+}
+// "sudo cmd..." -> "cmd..." (null when the line does not start with sudo)
+function sudoRest(line) {
+  const m = /^\s*sudo(?:\s+(.*))?$/s.exec(String(line || ''));
+  return m ? (m[1] || '') : null;
+}
+
+module.exports = { translate, needsAdmin, sudoRest, _internal: { splitTop, words, translateVars } };

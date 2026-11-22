@@ -11,10 +11,12 @@ npm run dist     # dist/Prism-win-x64.zip (on Windows)
 
 | File | What it does |
 |---|---|
-| `src/main.js` | windows, shells (pty), config changes, themes, the translation pipe, `--smoke` self-test |
+| `src/main.js` | windows, shells (pty), config changes, the line pipe (sudo, admin checks, translation), `--smoke` self-test |
 | `src/config.js` | defaults + Settings layer + `~/.config/prism/config.jsonc`, live reload |
-| `src/translate.js` | bash/cmd → PowerShell line translator |
+| `src/translate.js` | bash/cmd → PowerShell line translator, commands that need admin rights |
+| `src/elevate.js` | admin rights per command: UAC, the elevated helper (`Prism.exe --elevate`) and its pipes |
 | `src/shells.js` | shell detection and startup files (PowerShell, bash, zsh, cmd) |
-| `src/shell/profile.ps1` | the Prism shell: Linux commands, translation on Enter, prompt |
-| `src/desktop.js`, `src/win32.js`, `src/glaze.js` | dock, menu bar, Windows API, GlazeWM workspaces |
-| `src/renderer/` | terminal window, settings, dock and menu bar pages |
+| `src/shell/profile.ps1` | the Prism shell: Linux commands, translation on Enter, admin prompts, prompt |
+| `src/shell/elevate.ps1` | `sudo` for PowerShell, cmd and Git Bash |
+| `src/win32.js` | Windows API through koffi (blur, admin check, pipe client) |
+| `src/renderer/` | terminal window and settings |

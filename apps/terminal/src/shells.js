@@ -66,6 +66,7 @@ $global:PrismConfig = @{
   translate = $${sh.translate !== false}
   linux = $${sh.linux !== false}
   predictions = $${sh.predictions !== false}
+  adminAsk = $${(cfg.admin || {}).ask !== false}
   prompt = @{
     style = ${psq(p.style || 'auto')}
     segments = @(${seg})
@@ -170,11 +171,13 @@ const cmdPH = t => t.replace(PH, (m, k) =>
 const echoLines = text => '@' + text.split('\n').map(l => 'echo(' + cmdPH(doskeyDollar(l).replace(cmdSpecial, '^$&'))).join('& ');
 const runLine = body => '@' + body.split(/\s*(?:;|\n|&&)\s*/).filter(Boolean).map(x => cmdPH(doskeyDollar(x))).join(' & ') + (!hasPH(body) && single(body) ? ' $*' : '');
 const batchDef = (name, macro) => `@doskey ${name}=` + macro.replace(/%/g, '%%').replace(cmdSpecial, '^$&');
-function cmdInit(cmds) {
+function cmdInit(cmds, dir) {
   const msg = m => `@echo(${m}>"%PRISM_INBOX%\\cmd-%RANDOM%%RANDOM%.msg"`;
   const defs = [
     ...cmds.map(c => [c.name, c.type === 'text' ? echoLines(c.body) : runLine(c.body)]),
     ['settings', msg('panel;$*')],
+    // the command goes through an environment variable so its quotes and & survive
+    ['sudo', `set "PRISM_SUDO=$*" & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "${path.join(dir, 'elevate.ps1')}" -Kind cmd`],
     ['aliases', echoLines(listing(cmds))]
   ];
   return ['@chcp 65001 >nul', '@prompt $E[1;34m$P$E[0m$_$E[32m$G$E[0m ', ...defs.map(([n, m]) => batchDef(n, m))].join('\r\n') + '\r\n';
@@ -196,7 +199,8 @@ function writeAll(dir, cfg, staticDir, platform = process.platform) {
     'aliases.bash': shAliases(cmds, false),
     'aliases.zsh': shAliases(cmds, true),
     'init.bash': bashInit(shDir, cfg),
-    'init.cmd': cmdInit(cmds)
+    'init.cmd': cmdInit(cmds, dir),
+    'elevate.ps1': BOM + read('elevate.ps1')
   };
   for (const [f, s] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), s);
   for (const [f, s] of Object.entries(zshFiles(shDir))) fs.writeFileSync(path.join(dir, 'zsh', f), s);

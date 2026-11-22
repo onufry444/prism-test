@@ -1,11 +1,11 @@
 name: App
 
-# Builds Prism on Windows 11 (Server 2025), applies a real theme with GlazeWM, runs the self-test
-# (window, settings, shells, translation, dock, menu bar, workspaces), then tests install and uninstall.
+# Builds Prism on Windows (Server 2025), runs the self-test (window, settings, every shell, translation,
+# sudo and "needs admin" through the real elevated helper), then tests install and uninstall.
 # A new version in apps/terminal/package.json on main publishes a GitHub release.
 on:
   push:
-    branches: [main]
+    branches: ['**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -37,20 +37,9 @@ jobs:
       - name: Build
         run: npx electron-builder --win zip --x64 --publish never
 
-      - name: Apply a real theme (tiling with GlazeWM)
-        run: |
-          & ..\..\installer\prism.ps1 apply tiles
-          Start-Sleep -Seconds 6
-          if (-not (Get-Process -Name glazewm -ErrorAction SilentlyContinue)) { throw 'GlazeWM is not running' }
-          $cli = Get-ChildItem 'C:\Program Files\glzr.io' -Recurse -Filter glazewm.exe -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq 'cli' } | Select-Object -First 1
-          $q = (& $cli.FullName query workspaces) | Out-String
-          Write-Host $q
-          if ($q -notmatch '"success":\s*true') { throw 'GlazeWM does not answer (config not loaded?)' }
-          & ..\..\installer\prism.ps1 status
-
       - name: Self-test
         env:
-          PRISM_EXPECT_GLAZE: '1'
+          PRISM_TEST_ELEVATE: '1'
         run: |
           $exe = Get-ChildItem dist -Recurse -Filter Prism.exe | Select-Object -First 1
           $out = Join-Path $env:RUNNER_TEMP 'smoke.json'
@@ -63,10 +52,6 @@ jobs:
           } else { Write-Host 'No result file' }
           if ($p.ExitCode -ne 0) { exit 1 }
 
-      - name: Restore the runner's original look
-        if: always()
-        run: '& ..\..\installer\prism.ps1 restore'
-
       - name: One-line install, prism command, uninstall (Windows PowerShell 5.1)
         shell: powershell
         run: |
@@ -75,13 +60,11 @@ jobs:
           $env:PRISM_NO_LAUNCH = '1'
           Get-Content ..\..\install.ps1 -Raw | Invoke-Expression
           $root = Join-Path $env:LOCALAPPDATA 'Prism'
-          foreach ($f in 'app\Prism.exe', 'app\engine\installer\prism.ps1', 'app\engine\themes\tiles.json', 'bin\prism.cmd') { if (-not (Test-Path (Join-Path $root $f))) { throw "Missing after install: $f" } }
+          foreach ($f in 'app\Prism.exe', 'app\engine\installer\prism.ps1', 'bin\prism.cmd') { if (-not (Test-Path (Join-Path $root $f))) { throw "Missing after install: $f" } }
           if ([Environment]::GetEnvironmentVariable('Path', 'User') -notlike "*$root\bin*") { throw 'bin was not added to PATH' }
-          $list = & "$root\bin\prism.cmd" list | Out-String
-          Write-Host $list
-          if ($list -notmatch 'tiles' -or $list -notmatch 'glass') { throw 'prism list shows no themes' }
-          & "$root\bin\prism.cmd" apply glass -DryRun -OutDir "$env:RUNNER_TEMP\dry"
-          if (-not (Test-Path "$env:RUNNER_TEMP\dry\wallpaper.png")) { throw 'dry run produced no files' }
+          $v = & "$root\bin\prism.cmd" version | Out-String
+          Write-Host $v
+          if ($v -notmatch 'Prism \d+\.\d+') { throw 'prism version does not work' }
           # uninstall typed inside a Prism tab: hands off to one new window, never loops
           $env:TERM_PROGRAM = 'Prism'
           & "$root\bin\prism.cmd" uninstall -Force
@@ -105,7 +88,7 @@ jobs:
           path: apps/terminal/dist/Prism-win-x64.zip
 
       - name: GitHub release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

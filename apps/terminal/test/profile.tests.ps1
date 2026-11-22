@@ -56,6 +56,8 @@ try {
   $p = & $strip (prompt); Check 'prompt has path and symbol' ($p -match '❯ $' -and $p -match 'prism-ps-') $p
   Check 'translate without Prism returns the line' ((__prism_translate 'ls -la') -eq 'ls -la')
   $help = (prism help) -join "`n"; Check 'prism help' ($help -match 'prism alias')
+  Check 'sudo is a Prism command' ((Get-Command sudo -ErrorAction SilentlyContinue).CommandType -eq 'Function')
+  Check 'admin retry stays quiet after a success' ($null -eq (__prism_admin_retry $true 0))
 } finally { Pop-Location; Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 if ($script:fail) { Write-Host "$($script:fail) check(s) failed" -ForegroundColor Red; exit 1 }
 Write-Host 'All profile checks passed' -ForegroundColor Green

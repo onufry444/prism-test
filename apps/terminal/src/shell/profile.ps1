@@ -2,7 +2,7 @@
 # Loaded by init.ps1 after your own $PROFILE. Settings come from $global:PrismConfig (config.ps1).
 #
 # - Linux commands with GNU flags: ls -la, rm -rf, cp -r, mkdir -p, grep -rn, touch, which, head, tail, wc,
-#   df -h, du -sh, free -h, uname -a, export, unset, env, sudo, open, pbcopy, pbpaste, ln -s, kill -9, killall...
+#   df -h, du -sh, free -h, uname -a, export, unset, env, open, pbcopy, pbpaste, ln -s, kill -9, killall...
 #   PowerShell-style parameters (ls -Recurse, rm -Force) still go to the original cmdlets.
 # - Enter sends the line to Prism, which rewrites bash/cmd syntax (&&, $VAR, %VAR%, dir /s...) into PowerShell.
 # - A prompt configured in ~/.config/prism/config.jsonc (or kept from oh-my-posh/starship).
@@ -481,18 +481,6 @@ if ($global:PrismConfig.linux) {
     '{0,7} {1,6} {2,9} {3}' -f 'PID', '%CPU', 'MEM', 'COMMAND'
     Get-Process | Sort-Object CPU -Descending | ForEach-Object { '{0,7} {1,6:0.0} {2,9} {3}' -f $_.Id, $_.CPU, (__prism_hsize $_.WorkingSet64), $_.ProcessName }
   }
-  function global:sudo {
-    if (-not $args.Count) { Write-Host 'usage: sudo COMMAND [ARGS...]'; return }
-    $line = ($args | ForEach-Object { $s = [string]$_; if ($s -match '[\s"]') { "'" + $s.Replace("'", "''") + "'" } else { $s } }) -join ' '
-    $gs = Get-Command gsudo -CommandType Application -ErrorAction SilentlyContinue
-    if ($gs) { & $gs.Source @args; return }
-    $native = Get-Command sudo.exe -CommandType Application -ErrorAction SilentlyContinue
-    $app = Get-Command ([string]$args[0]) -CommandType Application -ErrorAction SilentlyContinue
-    if ($native -and $app) { & $native.Source @args; return }
-    $shell = (Get-Process -Id $PID).Path
-    if ($native) { & $native.Source $shell -NoProfile -Command $line; return }
-    Start-Process -FilePath $shell -Verb RunAs -ArgumentList '-NoExit', '-Command', $line
-  }
   function global:open { if (-not $args.Count) { Invoke-Item . ; return }; foreach ($a in $args) { $s = [string]$a; if ($s -match '^[a-z]+://') { Start-Process $s } else { Invoke-Item -LiteralPath $s } } }
   function global:xdg-open { open @args }
   function global:pbcopy { $t = ($input | Out-String); Set-Clipboard -Value $t.TrimEnd("`r", "`n") }
@@ -546,9 +534,9 @@ if ($__rl) {
   if ($global:PrismConfig.predictions -and $__rl.Version -ge [version]'2.1.0') {
     try { Set-PSReadLineOption -PredictionSource History; Set-PSReadLineOption -Colors @{ InlinePrediction = "$e[90m" } } catch {}
   }
-  if ($global:PrismConfig.translate) {
+  if ($env:PRISM_PIPE) {
     try {
-      Set-PSReadLineKeyHandler -Key Enter -BriefDescription PrismAcceptLine -Description 'Translate bash/cmd syntax, then run' -ScriptBlock {
+      Set-PSReadLineKeyHandler -Key Enter -BriefDescription PrismAcceptLine -Description 'sudo, admin checks and bash/cmd translation, then run' -ScriptBlock {
         $line = $null; $cursor = $null
         [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
         $t = __prism_translate $line
@@ -576,6 +564,50 @@ function global:__prism_translate([string]$line) {
     if ($resp) { $o = $resp | ConvertFrom-Json; if ($null -ne $o.line) { return [string]$o.line } }
   } catch {} finally { if ($client) { $client.Dispose() } }
   return $line
+}
+
+# ------------------------------------------------------------------ administrator rights
+. (Join-Path $PSScriptRoot 'elevate.ps1')
+function global:sudo {
+  if (-not $args.Count) { Write-Host 'usage: sudo COMMAND [ARGS...]'; return }
+  $line = ($args | ForEach-Object { $s = [string]$_; if ($s -match '[\s"'']') { "'" + $s.Replace("'", "''") + "'" } else { $s } }) -join ' '
+  __prism_elevate pwsh $line
+}
+# Prism rewrites `sudo ...` to __prism_sudo '...', so the whole line (quotes, &&, pipes) reaches the elevated shell as typed
+function global:__prism_sudo([string]$cmd) { __prism_elevate pwsh $cmd }
+# Prism rewrites commands that always need admin (sfc, DISM, choco install...) to: if (__prism_ask_admin ...) { command }
+# Returns $true to run it here as typed, $false after running it elevated.
+function global:__prism_ask_admin([string]$cmd) {
+  $name = ($cmd.Trim() -split '\s+')[0]
+  Write-Host "$($global:__PE)[33m⚡$($global:__PE)[0m $name needs administrator rights. Run it as admin? [Y/n] " -NoNewline
+  $k = [Console]::ReadKey($true)
+  if ($k.Key -eq 'N' -or $k.Key -eq 'Escape') { Write-Host 'n'; return $true }
+  Write-Host 'y'
+  __prism_elevate pwsh $cmd | Out-Host
+  return $false
+}
+# After a command fails with "Access denied" / "requires elevation", offer to run it again as admin.
+function global:__prism_admin_retry([bool]$ok, $code) {
+  if ($ok -or -not $global:PrismConfig.adminAsk -or $env:PRISM_ELEVATED -eq '1' -or -not $env:PRISM_TAB) { return }
+  $h = Get-History -Count 1
+  if (-not $h -or $h.Id -eq $global:__PrismAdminSeen) { return }
+  $global:__PrismAdminSeen = $h.Id
+  $line = [string]$h.CommandLine
+  if ($line -match '^\s*(sudo\b|if \(__prism_|__prism_)') { return }
+  $need = ($code -eq 740)  # ERROR_ELEVATION_REQUIRED
+  $err = $global:Error[0]
+  if ($err -and -not [object]::ReferenceEquals($err, $global:__PrismLastErr)) {
+    $global:__PrismLastErr = $err
+    $ex = $err.Exception
+    $txt = "$($err.FullyQualifiedErrorId) $($ex.GetType().Name) $($ex.Message) $($ex.InnerException.Message)"
+    if ($txt -match 'UnauthorizedAccess|Access (to the path .+ )?is denied|access denied|requires elevation|elevated|administrator|PermissionDenied') { $need = $true }
+  }
+  if (-not $need) { return }
+  Write-Host "$($global:__PE)[33m⚡$($global:__PE)[0m That needs administrator rights. Run it again as admin? [y/N] " -NoNewline
+  $k = [Console]::ReadKey($true)
+  if ($k.Key -ne 'Y') { Write-Host 'n'; return }
+  Write-Host 'y'
+  __prism_elevate pwsh $line
 }
 
 # ------------------------------------------------------------------ Prism commands
@@ -607,16 +639,16 @@ function global:prism {
     'unalias' { foreach ($n in $rest) { __prism_msg "remove;$n" }; return }
     'help' {
       "$e[1mPrism$e[0m commands"
-      '  settings                 open settings (themes, colors, dock, bar, shell, keys)'
+      '  settings                 open settings (appearance, shell, admin, aliases, keys)'
       '  prism alias NAME CMD     save an alias (bash style works too: alias ll=''ls -la'')'
       '  prism alias              list aliases          prism unalias NAME'
       '  prism opacity 0-100      terminal transparency prism font-size 10-28'
       '  prism scheme NAME        terminal color scheme prism reload'
-      '  prism apply THEME        apply a desktop theme prism restore'
-      '  prism list | status | update | uninstall'
+      '  sudo COMMAND             run one command as administrator, in this tab'
+      '  prism version | update | uninstall'
       ''
       "$e[1mLinux commands$e[0m: ls -la, rm -rf, cp -r, mkdir -p, grep -rn, touch, which, head, tail, wc, df -h, du -sh, free -h,"
-      '  uname -a, uptime, export, unset, env, sudo, open, pbcopy, pbpaste, ln -s, kill -9, killall, pgrep, ps aux'
+      '  uname -a, uptime, export, unset, env, open, pbcopy, pbpaste, ln -s, kill -9, killall, pgrep, ps aux'
       "$e[1mTranslation$e[0m: bash and cmd syntax (&&, `$VAR, %VAR%, dir /s, del /q, set X=1) is converted before it runs."
       '  Start a line with a space to run it exactly as typed.'
       return
@@ -652,10 +684,11 @@ if ($__pc.style -eq 'keep') { $__keepPrompt = $true }
 elseif ($__pc.style -eq 'auto') { $__def = [string]$function:prompt; if ($__def -match 'oh-my-posh|starship|Invoke-Starship|posh-git|Write-VcsStatus') { $__keepPrompt = $true } }
 if ($__keepPrompt) {
   $global:__PrismUserPrompt = $function:prompt
-  function global:prompt { __prism_tick; & $global:__PrismUserPrompt }
+  function global:prompt { $ok = $?; $code = $global:LASTEXITCODE; __prism_admin_retry $ok $code; __prism_tick; & $global:__PrismUserPrompt }
 } else {
   function global:prompt {
     $ok = $?; $code = $global:LASTEXITCODE
+    __prism_admin_retry $ok $code
     __prism_tick
     $c = $global:PrismConfig.prompt
     $e = $global:__PE; $r = "$e[0m"
@@ -713,3 +746,5 @@ function global:__prism_tick {
   $global:__PrismPwd = $here
   if (Get-Command __tc_reload -ErrorAction SilentlyContinue) { __tc_reload }
 }
+# errors from loading the profile are not a reason to offer admin rights
+$global:__PrismLastErr = $global:Error[0]

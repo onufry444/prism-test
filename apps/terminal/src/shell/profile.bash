@@ -23,10 +23,20 @@ prism() {
     unalias) for n in "$@"; do __prism_msg "remove;$n"; done ;;
     help)
       echo "Prism commands: settings, prism alias NAME CMD, prism unalias NAME, prism opacity 0-100,"
-      echo "  prism font-size 10-28, prism scheme NAME, prism apply THEME, prism restore, prism update" ;;
+      echo "  prism font-size 10-28, prism scheme NAME, prism update, prism uninstall; sudo COMMAND runs it as administrator" ;;
     *) if command -v cmd.exe >/dev/null 2>&1; then cmd.exe //c prism "$sub" "$@"; else echo "prism: unknown command '$sub'" >&2; return 1; fi ;;
   esac
 }
+
+# sudo in Git Bash: runs the command as administrator in this tab (Prism asks Windows for the rights)
+if [ -n "$PRISM_TAB" ] && { [ "$OSTYPE" = msys ] || [ "$OSTYPE" = cygwin ]; } && command -v powershell.exe >/dev/null 2>&1; then
+  sudo() {
+    if [ $# -eq 0 ]; then echo 'usage: sudo COMMAND [ARGS...]' >&2; return 2; fi
+    local s="$__TC_DIR/elevate.ps1"
+    command -v cygpath >/dev/null 2>&1 && s=$(cygpath -w "$s")
+    PRISM_SUDO="${*@Q}" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$s" -Kind bash
+  }
+fi
 
 # `alias name=value` in bash also saves the alias in Prism, so it survives restarts
 alias() {

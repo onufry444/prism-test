@@ -104,4 +104,22 @@ assert.deepStrictEqual(translate('dir /s', { env }).dialects, ['cmd']);
 assert.deepStrictEqual(translate('a && b', { env }).dialects, ['bash']);
 assert.deepStrictEqual(translate('ls', { env }).dialects, []);
 
+// administrator rights
+const { needsAdmin, sudoRest } = require('../src/translate');
+for (const l of ['sfc /scannow', 'DISM /Online /Cleanup-Image /RestoreHealth', 'choco install git -y', 'Set-ExecutionPolicy RemoteSigned',
+  'Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux', 'net user bob pw /add', 'reg add HKLM\\Software\\X /v a /d 1',
+  'echo hi; sfc /scannow', 'netsh winsock reset', 'sc.exe create svc binPath= x', 'New-NetFirewallRule -DisplayName x', 'chkdsk C: /f', 'diskpart', 'net stop spooler']) {
+  assert.ok(needsAdmin(l), 'needs admin: ' + l); n++;
+}
+for (const l of ['sfc /?', 'Set-ExecutionPolicy RemoteSigned -Scope CurrentUser', 'choco list', 'reg add HKCU\\Software\\X', 'net user', 'sc query',
+  'ls -la', 'echo sfc /scannow', 'git status', 'chkdsk C:', 'dism /?', 'Get-Service', '']) {
+  assert.ok(!needsAdmin(l), 'no admin needed: ' + l); n++;
+}
+assert.strictEqual(sudoRest('sudo choco install x && echo y'), 'choco install x && echo y');
+assert.strictEqual(sudoRest('  sudo   ls'), 'ls');
+assert.strictEqual(sudoRest('sudo'), '');
+assert.strictEqual(sudoRest('sudoku'), null);
+assert.strictEqual(sudoRest('echo sudo x'), null);
+n += 5;
+
 console.log(`OK: ${n} translator cases passed`);
