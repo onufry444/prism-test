@@ -45,6 +45,8 @@ Beginning system scan.  This process will take some time.
 - A command that fails with "Access denied" or "requires elevation" offers to run again as admin.
 - The output and your keystrokes stay in the tab. Windows shows its normal UAC prompt; Prism never stores passwords and keeps no admin rights afterwards. Prefer a separate admin window? Switch it in Settings › Administrator.
 
+**Your default terminal.** Turn it on in Settings › Windows and every console app (cmd, PowerShell, Python, anything from winget) opens in a Prism tab, whether you start it from Start, Explorer or Win+R. Programs that fail keep their tab open with the exit code, so you can read the error. You can also add “Open in Prism” to folders and “Run in Prism” to programs and scripts in Explorer, or type `prism run <command>` in any terminal.
+
 **Nice to use.** Tabs, transparency and blur, 10 color schemes (Tokyo Night, Catppuccin, Gruvbox, Nord, Dracula, Rosé Pine…), a fast prompt with folder and git branch, history suggestions while you type, Ctrl+Shift+F search, copy on select and a show/hide hotkey that works from anywhere.
 
 ## Configure it like Linux
@@ -60,6 +62,7 @@ Type `settings` for a screen you can use with the mouse. Everything there also l
   "shell": { "default": "prism", "translate": true },
   "prompt": { "segments": ["userhost", "path", "git", "duration", "status"], "symbol": "λ" },
   "admin": { "ask": true, "mode": "inline" },
+  "windows": { "defaultTerminal": true, "explorerMenu": true },
   "aliases": [ { "name": "proj", "body": "cd ~/projects/{1} && code ." } ],
   "keys": { "toggleWindow": "Ctrl+Alt+T" }
 }
@@ -77,9 +80,10 @@ In any terminal:
 |---|---|
 | `prism` | open Prism |
 | `prism settings` | open Prism in Settings |
+| `prism run <command>` | run a program in a new Prism tab |
 | `prism version` | show the installed version |
 | `prism update` | update Prism |
-| `prism uninstall [-Purge]` | remove Prism (`-Purge` also removes your settings and config) |
+| `prism uninstall [-Purge]` | remove Prism and switch everything above off (`-Purge` also removes your settings and config) |
 
 Inside Prism: `sudo`, `settings`, `prism alias NAME CMD`, `prism unalias NAME`, `prism opacity 0-100`, `prism font-size N`, `prism scheme NAME` and `prism help`.
 
@@ -88,13 +92,14 @@ Inside Prism: `sudo`, `settings`, `prism alias NAME CMD`, `prism unalias NAME`, 
 ```
 install.ps1               one-line installer (downloads the GitHub release)
 installer/prism.ps1       the prism command: version, update, uninstall
-apps/terminal/src/        the app: main.js, config.js, translate.js, shells.js, elevate.js, win32.js
+apps/terminal/src/        the app: main.js, config.js, translate.js, shells.js, elevate.js, handoff.js, integrate.js, win32.js
+apps/terminal/native/     prism-handoff.exe (C++): receives consoles from Windows when Prism is the default terminal
 apps/terminal/src/shell/  the Prism shell profiles for PowerShell and bash, and elevate.ps1 (sudo)
 ```
 
 To run from source, `cd apps/terminal`, then `npm install` and `npm start`. Tests: `npm test` (translator, admin detection and shell files), plus `test/profile.tests.ps1` on Windows.
 
-Every push runs on GitHub Actions with Windows Server 2025. CI builds the app and runs a self-test of the window, Settings and each shell, including `sudo` through the real elevated helper, then checks the one-line install and the uninstall. Raising the version in `apps/terminal/package.json` on `main` publishes a release.
+Every push runs on GitHub Actions with Windows Server 2025. CI builds the app and runs a self-test of the window, Settings and each shell, including `sudo` through the real elevated helper and a console handed over by Windows, then checks the one-line install and the uninstall. Raising the version in `apps/terminal/package.json` on `main` publishes a release.
 
 ## License
 

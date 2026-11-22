@@ -18,6 +18,19 @@
   $binDir = Join-Path $root 'bin'
 
   function Say([string]$m, [string]$c = 'Gray') { Write-Host "  $m" -ForegroundColor $c }
+  # Is this PowerShell shown by Prism (a Prism tab, or a console Windows handed to Prism)?
+  # Then closing Prism for the update would end this script too.
+  function Test-InsidePrism {
+    if ($env:TERM_PROGRAM -eq 'Prism') { return $true }
+    $st = Get-ItemProperty -LiteralPath 'HKCU:\Console\%%Startup' -ErrorAction SilentlyContinue
+    if (-not $st -or $st.DelegationTerminal -ne '{682C9CD9-030D-4029-BA37-7DD6F909FDF8}') { return $false }
+    try {
+      Add-Type -Namespace PrismSetup -Name Con -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
+      $hostPid = [uint32]0
+      [void][PrismSetup.Con]::GetWindowThreadProcessId([PrismSetup.Con]::GetConsoleWindow(), [ref]$hostPid)
+      return ((Get-Process -Id $hostPid -ErrorAction SilentlyContinue).ProcessName -eq 'OpenConsole')
+    } catch { return $false }
+  }
 
   try {
     Write-Host ''
@@ -25,6 +38,16 @@
     Write-Host ''
     if ($env:OS -ne 'Windows_NT') { throw 'Prism runs on Windows.' }
     if (-not [Environment]::Is64BitOperatingSystem) { throw 'Prism needs 64-bit Windows.' }
+
+    $running = @(Get-Process -Name Prism -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase) })
+    if ($running.Count -and -not $env:PRISM_INSTALL_CHILD -and (Test-InsidePrism)) {
+      # continue in a classic console window (conhost never hands its window to Prism)
+      $again = "`$env:PRISM_INSTALL_CHILD = '1'; `$env:PRISM_REPO = '$repo'; " + $(if ($env:PRISM_ZIP) { "`$env:PRISM_ZIP = '$($env:PRISM_ZIP -replace "'", "''")'; " } else { '' }) + "irm https://raw.githubusercontent.com/$repo/main/install.ps1 | iex"
+      $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($again))
+      Start-Process -FilePath 'conhost.exe' -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -EncodedCommand $enc"
+      Say 'Prism has to close for the update, so it continues in a separate window.' 'Yellow'
+      return
+    }
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('prism-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -63,11 +86,18 @@
       'setlocal',
       'set "PRISM_APP=%LOCALAPPDATA%\Prism\app"',
       'if "%~1"=="" (start "" "%PRISM_APP%\Prism.exe" & exit /b 0)',
+      'if /i "%~1"=="run" goto run',
       'if /i "%~1"=="settings" (start "" "%PRISM_APP%\Prism.exe" --settings & exit /b 0)',
       'if /i "%~1"=="open" (start "" "%PRISM_APP%\Prism.exe" & exit /b 0)',
       # `(goto) 2>nul` ends this .cmd before PowerShell starts (the rest of the line is already read),
       # so `prism uninstall` can delete this file without cmd complaining.
-      '(goto) 2>nul & powershell -NoProfile -ExecutionPolicy Bypass -File "%PRISM_APP%\engine\installer\prism.ps1" %*'
+      '(goto) 2>nul & powershell -NoProfile -ExecutionPolicy Bypass -File "%PRISM_APP%\engine\installer\prism.ps1" %*',
+      # prism run COMMAND: the command line goes through a file, so no argument is mistaken for a Prism option
+      ':run',
+      'set "PRISM_RUN=%TEMP%\prism-run-%RANDOM%%RANDOM%.txt"',
+      '>"%PRISM_RUN%" echo(%*',
+      'start "" "%PRISM_APP%\Prism.exe" --run-cmdfile "%PRISM_RUN%" --run-cwd "%CD%."',
+      'exit /b 0'
     ) -join "`r`n"
     [IO.File]::WriteAllText((Join-Path $binDir 'prism.cmd'), $cmd + "`r`n", (New-Object System.Text.ASCIIEncoding))
     # prism update uses the same repository

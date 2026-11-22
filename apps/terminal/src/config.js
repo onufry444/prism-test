@@ -67,6 +67,12 @@ const DEFAULTS = {
     zoomIn: 'Ctrl+=', zoomOut: 'Ctrl+-', zoomReset: 'Ctrl+0', newWindow: 'Ctrl+Shift+N',
     toggleWindow: 'Ctrl+Alt+T'
   },
+  windows: {
+    // console apps started anywhere in Windows open in a Prism tab (needs Windows Terminal's console host)
+    defaultTerminal: false,
+    // "Open in Prism" on folders and "Run in Prism" on programs and scripts in Explorer
+    explorerMenu: false
+  },
   admin: {
     // ask before running a command that needs administrator rights, then run it elevated
     ask: true,
@@ -155,6 +161,11 @@ const CONFIG_TEMPLATE = `// Prism configuration. Anything set here wins over the
   // ],
 
   // "keys": { "newTab": "Ctrl+Shift+T", "settings": "Ctrl+,", "toggleWindow": "Ctrl+Alt+T" },
+
+  // "windows": {
+  //   "defaultTerminal": true,          // console apps open in Prism instead of the old console window
+  //   "explorerMenu": true              // "Open in Prism" / "Run in Prism" in Explorer
+  // },
 
   // "admin": {
   //   "ask": true,                      // offer to re-run commands that failed for lack of admin rights

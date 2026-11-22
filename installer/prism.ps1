@@ -8,6 +8,7 @@
   prism settings             open Prism settings
   prism version              show the installed version
   prism update               update Prism to the latest version
+  prism run COMMAND          run a program in a new Prism tab (handled by prism.cmd)
   prism uninstall [-Purge]   remove Prism (-Purge also removes your settings and config)
   prism restore              undo Windows changes made by Prism 0.3 desktop themes, if any
 #>
@@ -28,6 +29,8 @@ $CurrentFile = Join-Path $DataDir 'current.json'
 $AppDir      = Join-Path $DataDir 'app'
 $BinDir      = Join-Path $DataDir 'bin'
 $Utf8NoBom   = New-Object System.Text.UTF8Encoding $false
+$PrismClsid  = '{682C9CD9-030D-4029-BA37-7DD6F909FDF8}'
+$StartupKey  = 'HKCU:\Console\%%Startup'
 # Prism 0.3 desktop themes could start window tiling at login; restore removes that too
 $StartupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Prism GlazeWM.lnk'
 
@@ -100,6 +103,39 @@ function Show-Version {
   $exe = Join-Path $AppDir 'Prism.exe'
   if (Test-Path -LiteralPath $exe) { Write-Host "Prism $(((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion) -replace '^(\d+\.\d+\.\d+)\.0$', '$1')" } else { Write-Host 'Prism is not installed in this user profile.' }
 }
+# A new classic console window: conhost never hands its window over to Prism, so it survives Prism closing.
+function Start-ClassicWindow([string]$Script) {
+  $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Script))
+  Start-Process -FilePath 'conhost.exe' -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -EncodedCommand $enc"
+}
+# Is this PowerShell shown by Prism (a Prism tab, or a console Windows handed to Prism)?
+function Test-InsidePrism {
+  if ($env:TERM_PROGRAM -eq 'Prism') { return $true }
+  $st = Get-ItemProperty -LiteralPath $StartupKey -ErrorAction SilentlyContinue
+  if (-not $st -or $st.DelegationTerminal -ne $PrismClsid) { return $false }
+  try {
+    Add-Type -Namespace PrismCli -Name Con -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
+    $hostPid = [uint32]0
+    [void][PrismCli.Con]::GetWindowThreadProcessId([PrismCli.Con]::GetConsoleWindow(), [ref]$hostPid)
+    return ((Get-Process -Id $hostPid -ErrorAction SilentlyContinue).ProcessName -eq 'OpenConsole')
+  } catch { return $false }
+}
+# Default terminal and Explorer menu entries (set from Prism Settings > Windows)
+function Remove-PrismIntegration {
+  $st = Get-ItemProperty -LiteralPath $StartupKey -ErrorAction SilentlyContinue
+  if ($st -and $st.DelegationTerminal -eq $PrismClsid) {
+    $b = $null; $bf = Join-Path $env:APPDATA 'Prism\defterm-backup.json'
+    if (Test-Path -LiteralPath $bf) { try { $b = Read-Json $bf } catch {} }
+    foreach ($pair in @(@('DelegationConsole', $(if ($b) { $b.console })), @('DelegationTerminal', $(if ($b) { $b.terminal })))) {
+      if ($pair[1] -and $pair[1] -ne $PrismClsid) { Set-ItemProperty -LiteralPath $StartupKey -Name $pair[0] -Value $pair[1] }
+      else { Remove-ItemProperty -LiteralPath $StartupKey -Name $pair[0] -ErrorAction SilentlyContinue }  # "Let Windows decide"
+    }
+    Write-Ok 'Windows uses its previous terminal again.'
+  }
+  $keys = @("CLSID\$PrismClsid", 'Directory\shell\Prism', 'Directory\Background\shell\Prism', 'Drive\shell\Prism') + @('.exe', '.bat', '.cmd', '.ps1', '.py' | ForEach-Object { "SystemFileAssociations\$_\shell\PrismRun" })
+  foreach ($k in $keys) { $p = "HKCU:\Software\Classes\$k"; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue } }
+  if (Test-Path -LiteralPath 'HKCU:\Software\Prism') { Remove-Item -LiteralPath 'HKCU:\Software\Prism' -Recurse -Force -ErrorAction SilentlyContinue }
+}
 function Invoke-Update {
   Write-Step 'Opening the updater in a new window (Prism will close for a moment)'
   $env:TERM_PROGRAM = $null
@@ -108,7 +144,7 @@ function Invoke-Update {
   $f = Join-Path $DataDir 'repo.txt'
   if (Test-Path -LiteralPath $f) { $r = ([IO.File]::ReadAllText($f)).Trim(); if ($r -match '^[\w.-]+/[\w.-]+$') { $repo = $r } }
   $cmd = "`$env:PRISM_REPO = '$repo'; irm https://raw.githubusercontent.com/$repo/main/install.ps1 | iex"
-  Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', $cmd
+  Start-ClassicWindow $cmd
 }
 function Remove-FromUserPath([string]$Dir) {
   $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
@@ -135,22 +171,22 @@ function Stop-PrismApp {
 function Invoke-Uninstall {
   # Inside a Prism tab, closing Prism would end this script too: finish in a separate window.
   # -Detached makes sure that window never hands off again, whatever the environment says.
-  if ($env:TERM_PROGRAM -eq 'Prism' -and -not $Detached) {
+  if (-not $Detached -and (Test-InsidePrism)) {
     if (-not $Force) {
       $a = Read-Host '  Remove Prism from this PC? Type YES'
       if ($a -ne 'YES') { Write-Note 'Cancelled.'; return }
     }
     Write-Step 'Prism will close now; the uninstall finishes in a new window.'
     $env:TERM_PROGRAM = $null
-    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", 'uninstall', '-Force', '-Detached')
-    if ($Purge) { $a += '-Purge' }
-    Start-Process -FilePath 'powershell.exe' -ArgumentList $a
+    Remove-PrismIntegration  # so nothing new opens in Prism while it goes away
+    Start-ClassicWindow ("& '{0}' uninstall -Force -Detached{1}" -f ($PSCommandPath -replace "'", "''"), $(if ($Purge) { ' -Purge' } else { '' }))
     return
   }
   if (-not $Force) {
     $a = Read-Host '  Remove Prism from this PC? Type YES'
     if ($a -ne 'YES') { Write-Note 'Cancelled.'; return }
   }
+  Remove-PrismIntegration
   Stop-PrismApp
   if (Test-Path $BackupFile) { Invoke-Restore }
   Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Prism.lnk') -ErrorAction SilentlyContinue

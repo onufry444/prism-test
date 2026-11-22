@@ -63,7 +63,8 @@ const keyMatch = (e, spec) => {
 
 // ---------- tabs ----------
 function fitActive() { if (!P.active) return; try { P.active.fit.fit(); } catch {} }
-P.newTab = async (profileId, cwd) => {
+// opts: { run: { file, args, cwd, title } } runs one program; { adopt: { id, title } } shows a console Windows handed to Prism
+P.newTab = async (profileId, cwd, opts = {}) => {
   const el = document.createElement('div');
   el.className = 'term';
   $('#terms').appendChild(el);
@@ -72,7 +73,7 @@ P.newTab = async (profileId, cwd) => {
   term.loadAddon(fit); term.loadAddon(search);
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => api.openExternal(uri)));
   term.open(el);
-  const t = { id: crypto.randomUUID(), term, fit, search, el, title: '…', profile: null };
+  const t = { id: opts.adopt ? opts.adopt.id : crypto.randomUUID(), term, fit, search, el, title: opts.adopt?.title || opts.run?.title || '…', profile: null };
   P.tabs.push(t);
   activate(t);
   term.onData(d => api.write(t.id, d));
@@ -81,7 +82,8 @@ P.newTab = async (profileId, cwd) => {
   term.onSelectionChange(() => { if (P.cfg.terminal.copyOnSelect && term.hasSelection()) api.clipWrite(term.getSelection()); });
   term.parser.registerOscHandler(7777, d => { handleMsg(d); return true; });
   term.attachCustomKeyEventHandler(e => keys(e, t));
-  const r = await api.create(t.id, profileId, term.cols, term.rows, cwd);
+  const r = opts.adopt ? await api.adopt(t.id, term.cols, term.rows) : await api.create(t.id, profileId, term.cols, term.rows, cwd, opts.run || null);
+  if (!r.ok && opts.adopt) { closeTab(t, true); return null; }
   t.profile = r.profile;
   if (t.title === '…') t.title = r.profile.name;
   renderTabs();
@@ -190,13 +192,15 @@ $('#gear').addEventListener('click', () => P.toggleSettings());
 api.onWinState(m => document.body.classList.toggle('maxed', m));
 api.onData(({ id, data }) => P.tabs.find(t => t.id === id)?.term.write(data));
 api.onExit(({ id }) => closeTab(P.tabs.find(t => t.id === id), true));
+api.onOpenTab(req => P.newTab(null, req.cwd || null, req));
 api.onAdmin(({ id, on }) => { const t = P.tabs.find(x => x.id === id); if (t) { t.admin = on; renderTabs(); } });
 
 api.init().then(async C => {
-  P.C = C; P.cfg = C.config; P.profiles = C.profiles; P.translateAvailable = C.translateAvailable; P.version = C.version; P.elevated = C.elevated;
+  P.C = C; P.cfg = C.config; P.profiles = C.profiles; P.translateAvailable = C.translateAvailable; P.version = C.version; P.elevated = C.elevated; P.platform = C.platform;
   $('#profiles').innerHTML = P.profiles.map(p => `<button data-id="${esc(p.id)}">${esc(p.name)}<small>${p.prism ? 'PowerShell + Linux commands' : p.kind === 'other' ? '' : esc(p.kind)}</small></button>`).join('');
   applyLook();
-  await P.newTab();
+  const first = C.startup.open;
+  await P.newTab(null, first?.cwd || null, first || {});
   if (C.startup.openSettings) P.openSettings(typeof C.startup.openSettings === 'string' ? C.startup.openSettings : '');
   if (C.error) P.toast(C.error);
 });

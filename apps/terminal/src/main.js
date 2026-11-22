@@ -22,6 +22,8 @@ const shells = require('./shells');
 const { Config, CONFIG_FILE, STYLE_FILE, CONFIG_DIR, ensureFiles } = require('./config');
 const { translate, needsAdmin, sudoRest } = require('./translate');
 const { Elevator } = require('./elevate');
+const { startHandoffServer } = require('./handoff');
+const { Integration, runSpecForFile } = require('./integrate');
 const psq = s => "'" + String(s).replace(/'/g, "''") + "'";
 
 const IS_WIN = process.platform === 'win32';
@@ -72,15 +74,47 @@ function launch(profile, tab) {
   }
 }
 function profileFor(id) { return PROFILES.find(p => p.id === id) || PROFILES.find(p => p.id === config.get().shell.default) || PROFILES[0]; }
+// A tab that runs one program instead of a shell ("prism run", "Run in Prism").
+function spawnRun(run, cols, rows) {
+  const { env } = launch({ kind: 'other' }, '');
+  const cwd = run.cwd && fs.existsSync(run.cwd) ? run.cwd : os.homedir();
+  const opts = { name: 'xterm-256color', cols: Math.max(cols, 2), rows: Math.max(rows, 2), cwd, env };
+  try { return pty.spawn(run.file, run.args || [], opts); }
+  catch (e) { if (run.fallback) return pty.spawn(run.fallback, run.args || [], opts); throw e; }
+}
 function spawnShell(profile, cols, rows, cwd, tab) {
   const { args, env } = launch(profile, tab);
   const dir = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
   return pty.spawn(profile.cmd, args, { name: 'xterm-256color', cols: Math.max(cols, 2), rows: Math.max(rows, 2), cwd: dir, env });
 }
-function attach(id, p, wc, profile, cols, rows) {
-  ptys.set(id, { p, wc, profile, cols, rows });
+// hold: keep the tab open after the program ends ('always', or 'error' = only when it failed), until a key is pressed
+function attach(id, p, wc, profile, cols, rows, hold) {
+  const t = { p, wc, profile, cols, rows, ended: false };
+  ptys.set(id, t);
   p.onData(data => { if (!wc.isDestroyed()) wc.send('pty:data', { id, data }); });
-  p.onExit(({ exitCode }) => { ptys.delete(id); elevator?.kill(id); if (!wc.isDestroyed()) wc.send('pty:exit', { id, exitCode }); });
+  p.onExit(({ exitCode }) => {
+    elevator?.kill(id);
+    if (wc.isDestroyed()) return ptys.delete(id);
+    if (hold === 'always' || (hold === 'error' && exitCode)) {
+      t.ended = true;
+      wc.send('pty:data', { id, data: `\r\n\x1b[90m[${exitCode ? `exited with code ${exitCode}` : 'finished'} · press any key to close]\x1b[0m` });
+    } else { ptys.delete(id); wc.send('pty:exit', { id, exitCode }); }
+  });
+}
+function endHeld(id) { const t = ptys.get(id); if (!t || !t.ended) return false; ptys.delete(id); if (!t.wc.isDestroyed()) t.wc.send('pty:exit', { id, exitCode: 0 }); return true; }
+
+// ---------- consoles handed over by Windows (Prism as the default terminal) ----------
+const waitingConsoles = new Map(); // tab id -> console, until a window picks it up
+let lastTerminal = null;
+function onHandedOffConsole(con) {
+  const id = require('crypto').randomUUID();
+  const title = con.hello.title || path.basename(con.hello.exe || '', '.exe') || 'console';
+  waitingConsoles.set(id, con);
+  con.onExit(() => { if (waitingConsoles.get(id) === con) setTimeout(() => waitingConsoles.delete(id), 30000); });
+  if (SMOKE_OUT) smokeHandoffs.push({ id, title, exe: con.hello.exe });
+  const w = (lastTerminal && !lastTerminal.isDestroyed() && lastTerminal) || terminals()[0];
+  if (w) { w.webContents.send('tab:open', { adopt: { id, title } }); if (!SMOKE_OUT) { if (w.isMinimized()) w.restore(); w.show(); w.focus(); } }
+  else openTerminal({ open: { adopt: { id, title } } });
 }
 
 // ---------- each line typed in PowerShell passes through here before it runs ----------
@@ -125,7 +159,7 @@ function startPipe() {
 }
 
 // ---------- messages from shell commands (settings, prism alias, sudo...) ----------
-const smokeMsgs = [];
+const smokeMsgs = [], smokeHandoffs = [];
 function onShellMessage(msg) {
   if (SMOKE_OUT) smokeMsgs.push(msg);
   const i = msg.indexOf(';'), cmd = i < 0 ? msg : msg.slice(0, i), arg = i < 0 ? '' : msg.slice(i + 1).trim();
@@ -182,6 +216,7 @@ function onConfigChanged() {
   const login = !!cfg.startup.launchAtLogin;
   if (login !== lastLogin && !SMOKE_OUT && app.isPackaged) { lastLogin = login; app.setLoginItemSettings({ openAtLogin: login, args: ['--background'] }); }
   registerShortcut();
+  applyIntegration();
   broadcast('config:changed', payload());
 }
 function payload() {
@@ -213,7 +248,7 @@ function undoOldDesktop() {
 }
 
 // ---------- terminal windows ----------
-function openTerminal({ show = true, settings = false } = {}) {
+function openTerminal({ show = true, settings = false, open = null } = {}) {
   const cfg = config.get();
   const wa = screen.getPrimaryDisplay().workArea;
   const width = Math.max(560, Math.min(1180, wa.width - 80)), height = Math.max(360, Math.min(740, wa.height - 60));
@@ -225,6 +260,9 @@ function openTerminal({ show = true, settings = false } = {}) {
   });
   w.prismTerminal = true;
   w.openSettingsOnLoad = settings;
+  w.openOnLoad = open; // the first tab: a program, a folder or a handed-off console instead of a shell
+  w.on('focus', () => { lastTerminal = w; });
+  lastTerminal = w;
   w.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   w.once('ready-to-show', () => {
     if (cfg.terminal.blur) win32.blurBehind(win32.hwndOf(w), 'blur');
@@ -237,6 +275,36 @@ function openTerminal({ show = true, settings = false } = {}) {
   const wc = w.webContents;
   w.on('closed', () => { for (const [id, t] of ptys) if (t.wc === wc) { elevator?.kill(id); try { t.p.kill(); } catch {} ptys.delete(id); } });
   return w;
+}
+// What a launch asks for: --run <base64 JSON from `prism run`>, --run-file <path> (Explorer), --cwd <folder>
+function openRequest(args, workingDir) {
+  const val = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
+  try {
+    const b = val('--run');
+    if (b) { const r = JSON.parse(Buffer.from(b, 'base64').toString('utf8')); if (r && r.file) return { run: r }; }
+  } catch {}
+  // prism.cmd writes `run COMMAND...` to a file (see install.ps1); cmd.exe runs it, so .cmd tools and PATH work
+  const cf = val('--run-cmdfile');
+  if (cf && /prism-run-\d+\.txt$/i.test(cf) && fs.existsSync(cf)) {
+    let line = ''; try { line = fs.readFileSync(cf, 'latin1').trim(); fs.unlinkSync(cf); } catch {}
+    line = line.replace(/^run\s*/i, '');
+    if (line) {
+      const cwd = val('--run-cwd') || workingDir;
+      return { run: { file: 'cmd.exe', args: `/d /s /c "${line}"`, cwd: cwd && fs.existsSync(cwd) ? path.resolve(cwd) : os.homedir(), title: line.split(/\s+/)[0].replace(/"/g, '') } };
+    }
+  }
+  const f = val('--run-file');
+  if (f && fs.existsSync(f)) return { run: runSpecForFile(f, PROFILES) };
+  const d = val('--cwd');
+  if (d && fs.existsSync(d)) return { cwd: d.replace(/"$/, '') };
+  return null;
+}
+function openTab(req) {
+  const w = (lastTerminal && !lastTerminal.isDestroyed() && lastTerminal) || terminals()[0];
+  if (!w) return openTerminal({ open: req });
+  if (w.isMinimized()) w.restore();
+  w.show(); w.focus();
+  w.webContents.send('tab:open', req);
 }
 function onPrismAction(what, arg) {
   if (what === 'open') { const w = terminals()[0]; if (w) { if (w.isMinimized()) w.restore(); w.show(); w.focus(); } else openTerminal(); }
@@ -257,12 +325,17 @@ function prismMenu(win) {
 // ---------- IPC ----------
 ipcMain.handle('app:init', e => ({
   ...payload(), profiles: PROFILES, platform: process.platform, version: app.getVersion(), translateAvailable: IS_WIN, elevated: ELEVATED,
-  startup: { openSettings: BrowserWindow.fromWebContents(e.sender)?.openSettingsOnLoad || false }
+  startup: { openSettings: BrowserWindow.fromWebContents(e.sender)?.openSettingsOnLoad || false, open: BrowserWindow.fromWebContents(e.sender)?.openOnLoad || null }
 }));
 ipcMain.handle('config:set', (e, patch) => setConfig(patch));
-ipcMain.handle('pty:create', (e, id, profileId, cols, rows, cwd) => {
-  const profile = profileFor(profileId);
+ipcMain.handle('pty:create', (e, id, profileId, cols, rows, cwd, run) => {
   const wc = e.sender;
+  if (run) {
+    const profile = { id: 'run', name: run.title || path.basename(String(run.file)), kind: 'run', cmd: run.file };
+    try { attach(id, spawnRun(run, cols, rows), wc, profile, cols, rows, 'always'); return { ok: true, profile }; }
+    catch (err) { setTimeout(() => { if (!wc.isDestroyed()) wc.send('pty:data', { id, data: `\x1b[31mCould not start ${run.file}: ${err.message}\x1b[0m\r\n` }); }, 50); return { ok: false, profile }; }
+  }
+  const profile = profileFor(profileId);
   let p;
   try { p = spawnShell(profile, cols, rows, cwd, id); } catch (err) {
     setTimeout(() => { if (!wc.isDestroyed()) wc.send('pty:data', { id, data: `\r\n\x1b[31mCould not start ${profile.cmd}: ${err.message}\x1b[0m\r\n` }); }, 50);
@@ -272,7 +345,16 @@ ipcMain.handle('pty:create', (e, id, profileId, cols, rows, cwd) => {
   return { ok: true, profile, pid: p.pid };
 });
 // while an admin command runs in a tab, its keys go to that command
-ipcMain.on('pty:write', (e, id, d) => { if (!elevator?.input(id, d)) ptys.get(id)?.p.write(d); });
+ipcMain.handle('pty:adopt', (e, id, cols, rows) => {
+  const con = waitingConsoles.get(id);
+  if (!con) return { ok: false };
+  waitingConsoles.delete(id);
+  const profile = { id: 'console', name: con.hello.title || path.basename(con.hello.exe || '', '.exe') || 'console', kind: 'console', cmd: con.hello.exe };
+  attach(id, con, e.sender, profile, cols, rows, 'error');
+  con.resize(cols, rows);
+  return { ok: true, profile };
+});
+ipcMain.on('pty:write', (e, id, d) => { if (endHeld(id)) return; if (!elevator?.input(id, d)) ptys.get(id)?.p.write(d); });
 ipcMain.on('pty:resize', (e, id, c, r) => {
   const t = ptys.get(id); if (!t) return;
   t.cols = c; t.rows = r;
@@ -301,6 +383,29 @@ ipcMain.on('app:menu', e => prismMenu(BrowserWindow.fromWebContents(e.sender)));
 ipcMain.handle('clip:read', () => clipboard.readText());
 ipcMain.on('clip:write', (e, t) => clipboard.writeText(String(t)));
 ipcMain.on('open', (e, url) => { if (/^(https?:\/\/|ms-settings:)/.test(url)) shell.openExternal(url); });
+
+let integration = null, lastWindowsSig = null;
+function startIntegration() {
+  if (!IS_WIN) return;
+  integration = new Integration({
+    exe: process.execPath,
+    exeArgs: app.isPackaged ? [] : [app.getAppPath()],
+    handoffExe: app.isPackaged ? path.join(path.dirname(process.execPath), 'prism-handoff.exe') : path.join(__dirname, '..', 'native', 'build', 'prism-handoff.exe'),
+    dataDir: DATA
+  });
+  startHandoffServer(onHandedOffConsole);
+}
+// registry follows the settings; the result is shown in Settings > Windows
+function applyIntegration(force) {
+  if (!integration || (SMOKE_OUT && !process.env.PRISM_TEST_HANDOFF)) return;
+  const sig = JSON.stringify(config.get().windows);
+  if (sig === lastWindowsSig && !force) return;
+  lastWindowsSig = sig;
+  const r = integration.apply(config.get());
+  for (const [k, v] of Object.entries(r)) if (v && !v.ok) notify(v.error);
+  broadcast('integration:changed', integration.status(false));
+}
+ipcMain.handle('integration:status', () => integration ? integration.status() : null);
 
 function startElevator() {
   elevator = new Elevator({
@@ -394,7 +499,50 @@ async function runSmoke() {
       }
     }
 
-    // 3. administrator rights on demand (CI runs elevated; PRISM_TEST_ELEVATE makes Prism go through the real helper anyway)
+    // 3. a tab that runs one program, and stays open with its exit code
+    {
+      const id = await w.webContents.executeJavaScript(`P.newTab(null, null, { run: { file: 'cmd.exe', args: '/d /s /c "echo RUN_OK & exit 4"', title: 'runtest' } }).then(t => t.id)`);
+      await wait(4000);
+      const r = await w.webContents.executeJavaScript(`(() => { const t = P.tabs.find(x => x.id === ${JSON.stringify(id)}); const b = t && t.term.buffer.active; return { title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+      check('run: program output in its own tab', /RUN_OK/.test(r.text) && r.title === 'runtest', r);
+      check('run: tab stays open with the exit code', /exited with code 4/.test(r.text), r.text.slice(-300));
+      await w.webContents.executeJavaScript(`P.typeInActive('x')`);
+      await wait(800);
+      const left = await w.webContents.executeJavaScript(`P.tabs.some(x => x.id === ${JSON.stringify(id)})`);
+      check('run: a key closes the finished tab', !left, left);
+    }
+
+    // 4. Prism as the default terminal: a console started like from Explorer must land in a Prism tab
+    if (IS_WIN && process.env.PRISM_TEST_HANDOFF) {
+      const st0 = integration.status();
+      setConfig({ windows: { defaultTerminal: true } });
+      await wait(500);
+      const st = integration.status();
+      check('default terminal: registry set', st.defaultTerminal.active, { before: st0, after: st });
+      if (process.env.PRISM_TEST_HANDOFF_HKLM) {
+        // CI runs elevated, and Windows ignores per-user COM registrations for elevated processes
+        const ls = require('child_process').spawnSync('reg.exe', ['add', 'HKLM\\Software\\Classes\\CLSID\\{682C9CD9-030D-4029-BA37-7DD6F909FDF8}\\LocalServer32', '/ve', '/d', `"${integration.host.handoffExe}"`, '/f'], { encoding: 'utf8' });
+        console.log('HKLM registration:', ls.status, ls.stderr);
+      }
+      const before = smokeHandoffs.length;
+      if (process.env.PRISM_TEST_HANDOFF_LOG) require('child_process').spawnSync('reg.exe', ['add', 'HKCU\\Software\\Prism', '/v', 'HandoffLog', '/d', process.env.PRISM_TEST_HANDOFF_LOG, '/f']);
+      // `start` gives the program a new console, as when it is opened from Explorer
+      require('child_process').spawn('cmd.exe', ['/d /c start "" cmd.exe /d /c "echo HANDOFF_OK & ping -n 4 127.0.0.1 >nul & exit 3"'], { windowsVerbatimArguments: true, windowsHide: true, stdio: 'ignore' });
+      for (let i = 0; i < 60 && smokeHandoffs.length === before; i++) await wait(500);
+      const got = smokeHandoffs[before];
+      check('default terminal: Windows hands the console to Prism', !!got, { handoffs: smokeHandoffs, log: (() => { try { return fs.readFileSync(process.env.PRISM_TEST_HANDOFF_LOG || '', 'utf8').slice(-3000); } catch { return null; } })() });
+      if (got) {
+        await wait(7000);
+        const r = await w.webContents.executeJavaScript(`(() => { const t = P.tabs.find(x => x.id === ${JSON.stringify(got.id)}); const b = t && t.term.buffer.active; return { tab: !!t, title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+        check('default terminal: console output in the tab', r.tab && /HANDOFF_OK/.test(r.text), r);
+        check('default terminal: exit code shown', /exited with code 3/.test(r.text), r.text.slice(-300));
+      }
+      setConfig({ windows: { defaultTerminal: false } });
+      await wait(500);
+      check('default terminal: switched off again', !integration.status(false).defaultTerminal.active, integration.status(false));
+    }
+
+    // 5. administrator rights on demand (CI runs elevated; PRISM_TEST_ELEVATE makes Prism go through the real helper anyway)
     if (IS_WIN && process.env.PRISM_TEST_ELEVATE) {
       const ps = PROFILES.find(p => p.kind === 'pwsh' && p.id !== 'prism');
       setConfig({ admin: { mode: 'inline', ask: true } });
@@ -432,7 +580,9 @@ async function runSmoke() {
 if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', (e, args) => {
+  app.on('second-instance', (e, args, workingDirectory) => {
+    const req = openRequest(args, workingDirectory);
+    if (req) return openTab(req);
     if (args.includes('--settings')) onPrismAction('settings');
     else if (!args.includes('--background')) { if (terminals().some(w => w.isVisible())) openTerminal(); else onPrismAction('open'); }
   });
@@ -442,12 +592,14 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     watchInbox();
     startPipe();
     startElevator();
+    startIntegration();
     config.onChange(() => onConfigChanged());
     if (SMOKE_OUT) return runSmoke();
     undoOldDesktop();
     config.watch();
     onConfigChanged();
-    if (!argv.includes('--background')) openTerminal({ settings: argv.includes('--settings') });
+    const req = openRequest(argv, process.cwd());
+    if (!argv.includes('--background') || req) openTerminal({ settings: argv.includes('--settings'), open: req });
     app.on('activate', () => { if (!terminals().length) openTerminal(); });
   });
   app.on('window-all-closed', () => {

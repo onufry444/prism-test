@@ -11,6 +11,7 @@ const patchOf = (p, v) => { const o = {}; set(o, p, v); return o; };
 const ICON = {
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/>',
   shell: '<path d="M4 17l6-5-6-5M12 19h8"/>',
+  windows: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
   admin: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
   aliases: '<path d="M9 5H7a2 2 0 0 0-2 2v3l-2 2 2 2v3a2 2 0 0 0 2 2h2M15 5h2a2 2 0 0 1 2 2v3l2 2-2 2v3a2 2 0 0 1-2 2h-2"/>',
   keys: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
@@ -21,6 +22,7 @@ const SECTIONS = [
   { id: 'terminal', name: 'Appearance', sub: 'Colors, transparency, font and window. Changes apply immediately.', pv: 'term' },
   { id: 'shell', name: 'Shell & prompt', sub: 'Default shell, command translation, Linux commands and the prompt.', pv: 'prompt' },
   { id: 'admin', name: 'Administrator', sub: 'Run Prism as a normal user. When a command needs admin rights, Prism asks and runs just that command elevated.', pv: null },
+  { id: 'windows', name: 'Windows', sub: 'Use Prism for every console app, not just the ones you start from Prism.', pv: null },
   { id: 'aliases', name: 'Aliases', sub: 'Your own commands. They work in every shell, with arguments and pipes.', pv: null },
   { id: 'keys', name: 'Keyboard', sub: 'Shortcuts. Click a field and press the keys you want.', pv: null },
   { id: 'files', name: 'Config files', sub: 'Prefer text files? Everything here can be set in config.jsonc and styled with style.css. They reload when you save.', pv: null },
@@ -28,7 +30,7 @@ const SECTIONS = [
 ];
 P.sectionIds = SECTIONS.map(s => s.id);
 const SEC = id => SECTIONS.find(s => s.id === id);
-const ALIAS = { appearance: 'terminal', look: 'terminal', colors: 'terminal', theme: 'terminal', themes: 'terminal', font: 'terminal', cmd: 'aliases', commands: 'aliases', alias: 'aliases', prompt: 'shell', translate: 'shell', sudo: 'admin', elevation: 'admin', config: 'files', keyboard: 'keys', shortcuts: 'keys' };
+const ALIAS = { appearance: 'terminal', look: 'terminal', colors: 'terminal', theme: 'terminal', themes: 'terminal', font: 'terminal', cmd: 'aliases', commands: 'aliases', alias: 'aliases', prompt: 'shell', translate: 'shell', sudo: 'admin', elevation: 'admin', windows: 'windows', default: 'windows', explorer: 'windows', integration: 'windows', config: 'files', keyboard: 'keys', shortcuts: 'keys' };
 const ANSI_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'];
 const SEGMENTS = { userhost: 'user@host', path: 'Folder', git: 'Git branch', venv: 'Python venv', duration: 'Command time', status: 'Exit status', time: 'Clock', shell: 'Shell name' };
 const KEYS = { newTab: 'New tab', closeTab: 'Close tab', nextTab: 'Next tab', prevTab: 'Previous tab', newWindow: 'New window', settings: 'Settings', search: 'Find', copy: 'Copy', paste: 'Paste', zoomIn: 'Bigger text', zoomOut: 'Smaller text', zoomReset: 'Reset text size', toggleWindow: 'Show/hide Prism from anywhere' };
@@ -59,6 +61,7 @@ P.goSection = s => go(s);
 // ---------- render ----------
 function go(sec) {
   st.section = SEC(sec) ? sec : 'terminal';
+  if (st.section === 'windows') api.integration().then(s => { P.integration = s; if (st.section === 'windows' && !$('#settings').hidden) renderSection(); });
   const s = SEC(st.section);
   $('#sNav').innerHTML = SECTIONS.map(x => `<button class="nb${x.id === st.section ? ' on' : ''}" data-s="${x.id}"><svg viewBox="0 0 24 24">${ICON[x.id]}</svg>${x.name}</button>`).join('')
     + '<div class="hint"><kbd>Esc</kbd> back to the terminal</div>';
@@ -71,7 +74,7 @@ function go(sec) {
   $('#sMain').scrollTop = 0;
 }
 function renderSection() {
-  const R = { terminal: secTerminal, shell: secShell, admin: secAdmin, aliases: secAliases, keys: secKeys, files: secFiles, about: secAbout };
+  const R = { terminal: secTerminal, shell: secShell, admin: secAdmin, windows: secWindows, aliases: secAliases, keys: secKeys, files: secFiles, about: secAbout };
   $('#sContent').innerHTML = R[st.section]();
 }
 function updatePreview() {
@@ -158,6 +161,23 @@ function secShell() {
       + toggle('data-c', 'prompt.unixPaths', 'Unix-style paths (~/projects/app)') + range('data-c', 'prompt.pathDepth', 'Folders to show (0 = all)', 0, 8, '')
       + `<div class="crows">${['path', 'git', 'symbol', 'error', 'muted'].map(k => colorRow('data-c', 'prompt.colors.' + k, k[0].toUpperCase() + k.slice(1))).join('')}</div>`);
 }
+function secWindows() {
+  if (P.platform && P.platform !== 'win32') return group('', '<p class="note">These options are for Windows.</p>');
+  const st = P.integration, dt = st && st.defaultTerminal;
+  const state = !st ? 'Checking…' : dt.active ? '✓ Prism is the default terminal.' : 'Windows uses ' + (dt.console === null ? 'its classic console window.' : 'another terminal.');
+  const needs = st && dt.console === null ? '<div class="notice">Prism takes over consoles through the console host that comes with Windows Terminal, and it is not installed. On Windows 11 it is built in; on Windows 10 install “Windows Terminal” from the Microsoft Store.</div>' : '';
+  return group('Default terminal', toggle('data-c', 'windows.defaultTerminal', 'Open console apps in Prism', 'Programs like cmd, PowerShell, Python or anything from winget open in a Prism tab, whether you start them from Start, Explorer or Win+R.')
+      + `<p class="note">${esc(state)} Apps started as administrator keep the classic window.</p>` + needs)
+    + group('Explorer', toggle('data-c', 'windows.explorerMenu', 'Add Prism to the right-click menu', '“Open in Prism” on folders, and “Run in Prism” on .exe, .bat, .cmd, .ps1 and .py files. On Windows 11 they are under “Show more options”.'))
+    + group('From any terminal', `<table class="keys"><tr><td><code class="k">prism run &lt;command&gt;</code></td><td>run a program in a new Prism tab</td></tr>
+      <tr><td><code class="k">prism uninstall</code></td><td>also switches all of this off</td></tr></table>`);
+}
+// status updates after a switch; the Windows Terminal lookup from the last full check is kept
+api.onIntegration(s => {
+  const prev = P.integration?.defaultTerminal || {};
+  P.integration = { ...s, defaultTerminal: { ...s.defaultTerminal, console: s.defaultTerminal.console === undefined ? prev.console : s.defaultTerminal.console } };
+  if (!$('#settings').hidden && st.section === 'windows') renderSection();
+});
 function secAdmin() {
   const a = P.cfg.admin, elevated = P.elevated;
   return (elevated ? '<div class="notice">Prism itself is running as administrator, so every command already has admin rights. Start Prism normally to get the safer per-command flow below.</div>' : '')

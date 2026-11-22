@@ -34,13 +34,42 @@ jobs:
       - name: Dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Native helper (prism-handoff.exe, makes Prism the default terminal)
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VS=%%i"
+          call "%VS%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
+          if not exist native\build mkdir native\build
+          cl /nologo /O2 /EHsc /std:c++17 /W3 /DUNICODE /D_UNICODE native\handoff.cpp /Fonative\build\ /Fenative\build\prism-handoff.exe /link ole32.lib oleaut32.lib advapi32.lib user32.lib /SUBSYSTEM:WINDOWS || exit /b 1
+          native\build\prism-handoff.exe --version || exit /b 1
+
       - name: Build
         run: npx electron-builder --win zip --x64 --publish never
+
+      - name: Windows Terminal (its console host passes consoles on to Prism)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (-not (Get-AppxPackage -Name Microsoft.WindowsTerminal)) {
+            $rel = gh api repos/microsoft/terminal/releases/latest | ConvertFrom-Json
+            $kit = $rel.assets | Where-Object name -like '*PreinstallKit.zip' | Select-Object -First 1
+            gh release download $rel.tag_name -R microsoft/terminal -p $kit.name -D $env:RUNNER_TEMP
+            $dir = Join-Path $env:RUNNER_TEMP 'wt'
+            Expand-Archive (Join-Path $env:RUNNER_TEMP $kit.name) -DestinationPath $dir -Force
+            $bundle = Get-ChildItem $dir -Filter *.msixbundle | Select-Object -First 1
+            $deps = @(Get-ChildItem $dir -Filter *.appx | Where-Object Name -like '*x64*' | ForEach-Object FullName)
+            Add-AppxPackage -Path $bundle.FullName -DependencyPath $deps
+          }
+          Get-AppxPackage -Name Microsoft.WindowsTerminal* | Format-Table Name, Version
+          "Session: $((Get-Process -Id $PID).SessionId)"
 
       - name: Self-test
         env:
           PRISM_TEST_ELEVATE: '1'
+          PRISM_TEST_HANDOFF: '1'
+          PRISM_TEST_HANDOFF_HKLM: '1'
         run: |
+          $env:PRISM_TEST_HANDOFF_LOG = Join-Path $env:RUNNER_TEMP 'handoff.log'
           $exe = Get-ChildItem dist -Recurse -Filter Prism.exe | Select-Object -First 1
           $out = Join-Path $env:RUNNER_TEMP 'smoke.json'
           $p = Start-Process -FilePath $exe.FullName -ArgumentList '--smoke', "`"$out`"" -PassThru -Wait
@@ -50,6 +79,8 @@ jobs:
               if ($c.ok) { Write-Host "OK    $($c.name)" } else { Write-Host "FAIL  $($c.name)"; Write-Host ($c.info | ConvertTo-Json -Depth 5) }
             }
           } else { Write-Host 'No result file' }
+          if (Test-Path $env:PRISM_TEST_HANDOFF_LOG) { Write-Host '--- handoff log'; Get-Content $env:PRISM_TEST_HANDOFF_LOG | Select-Object -Last 40 }
+          reg delete "HKLM\Software\Classes\CLSID\{682C9CD9-030D-4029-BA37-7DD6F909FDF8}" /f 2>$null
           if ($p.ExitCode -ne 0) { exit 1 }
 
       - name: One-line install, prism command, uninstall (Windows PowerShell 5.1)
@@ -65,13 +96,18 @@ jobs:
           $v = & "$root\bin\prism.cmd" version | Out-String
           Write-Host $v
           if ($v -notmatch 'Prism \d+\.\d+') { throw 'prism version does not work' }
+          # prism run: opens Prism with the command (Prism picks up and deletes the request file)
+          & "$root\bin\prism.cmd" run cmd /c echo hi
+          for ($i = 0; $i -lt 60 -and @(Get-ChildItem $env:TEMP -Filter 'prism-run-*.txt').Count; $i++) { Start-Sleep -Milliseconds 500 }
+          if (@(Get-ChildItem $env:TEMP -Filter 'prism-run-*.txt').Count) { throw 'prism run: Prism did not pick up the command' }
+          Write-Host 'prism run works'
           # uninstall typed inside a Prism tab: hands off to one new window, never loops
           $env:TERM_PROGRAM = 'Prism'
           & "$root\bin\prism.cmd" uninstall -Force
           $env:TERM_PROGRAM = $null
           $peak = 0
           for ($i = 0; $i -lt 40; $i++) {
-            $n = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*prism.ps1*uninstall*' }).Count
+            $n = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*prism.ps1*uninstall*' -or $_.CommandLine -like '*-EncodedCommand*' }).Count
             if ($n -gt $peak) { $peak = $n }
             if (-not (Test-Path "$root\app") -and $n -eq 0) { break }
             Start-Sleep -Milliseconds 500
