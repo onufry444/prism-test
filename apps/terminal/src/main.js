@@ -450,11 +450,11 @@ async function runSmoke() {
       const waBefore = win32.getWorkArea();
       setConfig({ dock: { enabled: true }, bar: { enabled: true } });
       await wait(6000);
-      check('dock: window open', !!desktop.dock && desktop.dock.isVisible(), null);
+      check('dock: window open', !!desktop.dock && desktop.dock.isVisible(), { exists: !!desktop.dock, bounds: desktop.dock && desktop.dock.getBounds(), hiddenFor: desktop.fullscreen || null, fg: win32.className(win32.foreground()) });
       check('dock: pinned apps listed', desktop.items.filter(i => i.pinned).length >= 3, desktop.items.map(i => i.name));
       check('dock: Prism shows as running', desktop.items.some(i => i.prism && i.running), desktop.items.map(i => [i.name, i.running]));
       check('dock: icons loaded', desktop.items.filter(i => i.iconUrl).length >= 2, desktop.items.map(i => [i.name, !!i.iconUrl]));
-      check('bar: window open', !!desktop.bar && desktop.bar.isVisible(), null);
+      check('bar: window open', !!desktop.bar && desktop.bar.isVisible(), { exists: !!desktop.bar, bounds: desktop.bar && desktop.bar.getBounds(), hiddenFor: desktop.fullscreen || null, fg: win32.className(win32.foreground()) });
       const wa = win32.getWorkArea(), sf = screen.getPrimaryDisplay().scaleFactor;
       check('bar: reserves screen space', wa && wa.top >= Math.round(config.get().bar.height * sf) - 1, { wa, waBefore });
       if (taskbar !== null) check('dock: taskbar set to auto-hide', win32.taskbarAutohide() === true, null);

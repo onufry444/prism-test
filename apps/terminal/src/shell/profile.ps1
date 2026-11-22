@@ -67,7 +67,7 @@ function global:__prism_hidden($i) { return ($i.Name.StartsWith('.') -or [bool](
 
 if ($global:PrismConfig.linux) {
   # Windows PowerShell 5.1 aliases curl to Invoke-WebRequest; the real curl.exe ships with Windows.
-  if (Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue) { Set-Alias -Name curl -Value curl.exe -Scope Global -Option AllScope -Force }
+  if (Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue) { Set-Alias -Name curl -Value curl.exe -Scope Global -Option AllScope -Force; Set-Alias -Name curl -Value curl.exe -Option AllScope -Force }
 
   # ---------------------------------------------------------------- ls
   function global:__prism_lscolor($i) {
@@ -505,7 +505,11 @@ if ($global:PrismConfig.linux) {
 
   # Built-in aliases (ls, rm, cp...) beat functions, so the aliases themselves are pointed at Prism's versions.
   # Global + AllScope makes that work in every scope, and the original cmdlets stay available by full name.
-  foreach ($n in 'ls', 'rm', 'cp', 'mv', 'mkdir', 'md', 'rmdir', 'cat', 'kill', 'ps', 'wget', 'man') { Set-Alias -Name $n -Value "Prism-$n" -Scope Global -Option AllScope -Force }
+  # The scope that loaded this profile already holds its own copy of each AllScope alias, so it is set there too.
+  foreach ($n in 'ls', 'rm', 'cp', 'mv', 'mkdir', 'md', 'rmdir', 'cat', 'kill', 'ps', 'wget', 'man') {
+    Set-Alias -Name $n -Value "Prism-$n" -Scope Global -Option AllScope -Force
+    Set-Alias -Name $n -Value "Prism-$n" -Option AllScope -Force
+  }
 
   # Suggest an install when a well-known tool is missing.
   $global:__PrismInstall = @{ vim = 'vim.vim'; nvim = 'Neovim.Neovim'; nano = 'GNU.Nano'; htop = 'aristocratos.btop4win'; btop = 'aristocratos.btop4win'; top = 'aristocratos.btop4win';

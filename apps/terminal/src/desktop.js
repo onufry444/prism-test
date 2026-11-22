@@ -162,9 +162,9 @@ class Desktop {
     if (this.dock) this.pushItems(false);
     if (this.bar) this.pushBar();
     // hide over full-screen apps (videos, games)
-    const fg = win32.foreground();
-    const r = fg && win32.windowRect(fg), d = screen.getPrimaryDisplay(), sf = d.scaleFactor;
-    const full = r && !this.ownHwnds().has(fg) && r.left <= d.bounds.x * sf && r.top <= d.bounds.y * sf && r.right >= (d.bounds.x + d.bounds.width) * sf && r.bottom >= (d.bounds.y + d.bounds.height) * sf;
+    const d = screen.getPrimaryDisplay(), sf = d.scaleFactor, b = d.bounds;
+    this.fullscreen = win32.fullscreenApp(this.ownHwnds(), { left: Math.round(b.x * sf), top: Math.round(b.y * sf), right: Math.round((b.x + b.width) * sf), bottom: Math.round((b.y + b.height) * sf) });
+    const full = !!this.fullscreen;
     for (const w of [this.dock, this.bar]) if (w && !w.isDestroyed()) { if (full && w.isVisible()) w.hide(); else if (!full && !w.isVisible()) w.showInactive(); }
   }
   windows() { return win32.listWindows(this.ownHwnds()); }

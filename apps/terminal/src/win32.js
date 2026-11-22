@@ -21,6 +21,7 @@ function load() {
       GetClassNameW: user32.func('int __stdcall GetClassNameW(intptr hwnd, _Out_ uint16 *buf, int max)'),
       IsWindowVisible: user32.func('bool __stdcall IsWindowVisible(intptr hwnd)'),
       IsIconic: user32.func('bool __stdcall IsIconic(intptr hwnd)'),
+      IsZoomed: user32.func('bool __stdcall IsZoomed(intptr hwnd)'),
       GetWindow: user32.func('intptr __stdcall GetWindow(intptr hwnd, uint32 cmd)'),
       GetWindowLongPtrW: user32.func('intptr __stdcall GetWindowLongPtrW(intptr hwnd, int index)'),
       GetWindowThreadProcessId: user32.func('uint32 __stdcall GetWindowThreadProcessId(intptr hwnd, _Out_ uint32 *pid)'),
@@ -101,6 +102,18 @@ function focus(hwnd) {
 function minimize(hwnd) { const a = load(); return a ? !!a.ShowWindow(hwnd, 6) : false; }
 function close(hwnd) { const a = load(); return a ? !!a.PostMessageW(hwnd, 0x0010, 0, 0) : false; }
 function foreground() { const a = load(); return a ? Number(a.GetForegroundWindow()) : 0; }
+function className(hwnd) { const a = load(); return a && hwnd ? str16(a.GetClassNameW, hwnd) : ''; }
+// The desktop and the taskbar cover the whole screen but are never "full-screen apps".
+const SHELL_CLASSES = new Set(['Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'Windows.UI.Core.CoreWindow', 'XamlExplorerHostIslandWindow']);
+// A full-screen app (video, game, presentation) is in front on the primary monitor.
+function fullscreenApp(own, bounds) {
+  const fg = foreground(); if (!fg || own.has(fg)) return null;
+  const cls = className(fg); if (SHELL_CLASSES.has(cls)) return null;
+  if (load().IsZoomed(fg)) return null; // a maximized window is not a full-screen app
+  const r = windowRect(fg);
+  if (!r || r.left > bounds.left || r.top > bounds.top || r.right < bounds.right || r.bottom < bounds.bottom) return null;
+  return { hwnd: fg, cls, rect: r };
+}
 
 // Taskbar auto-hide (ABM_GETSTATE / ABM_SETSTATE). Returns the previous state or null.
 function taskbarAutohide(on) {
@@ -154,4 +167,4 @@ function appbarRemove(hwnd) {
 }
 const hwndOf = win => { try { const b = win.getNativeWindowHandle(); return b.length >= 8 ? Number(b.readBigUInt64LE(0)) : b.readUInt32LE(0); } catch { return 0; } };
 
-module.exports = { windowRect, blurBehind, hwndOf, appbar, appbarRemove, available: () => !!load(), listWindows, focus, minimize, close, foreground, taskbarAutohide, getWorkArea, setWorkArea, exePath };
+module.exports = { className, fullscreenApp, windowRect, blurBehind, hwndOf, appbar, appbarRemove, available: () => !!load(), listWindows, focus, minimize, close, foreground, taskbarAutohide, getWorkArea, setWorkArea, exePath };
