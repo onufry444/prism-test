@@ -398,7 +398,13 @@ ipcMain.on('win:resize', (e, edge, dx, dy) => {
   if (/s/.test(edge)) height = Math.max(minH, b.height + dy);
   if (/w/.test(edge)) { width = Math.max(minW, b.width - dx); x = b.x + b.width - width; }
   if (/n/.test(edge)) { height = Math.max(minH, b.height - dy); y = b.y + b.height - height; }
-  w.setBounds({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) });
+  const want = { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+  w.setBounds(want);
+  // some Windows setups ignore a move and a resize in one call on transparent windows: do them one by one
+  const got = w.getBounds();
+  if (got.x !== want.x || got.y !== want.y || got.width !== want.width || got.height !== want.height) {
+    w.setPosition(want.x, want.y); w.setSize(want.width, want.height);
+  }
 });
 ipcMain.on('app:menu', e => prismMenu(BrowserWindow.fromWebContents(e.sender)));
 ipcMain.handle('clip:read', () => clipboard.readText());
@@ -554,8 +560,8 @@ async function runSmoke() {
       await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('nw', 30, 20))`);
       await wait(500);
       const b2 = w.getBounds();
-      w.setBounds({ x: b2.x + 5, y: b2.y + 5, width: b2.width, height: b2.height }); await wait(300);
-      const b3 = w.getBounds(); // diagnostics: can the window move at all?
+      w.setBounds({ x: b2.x + 5, y: b2.y + 5, width: b2.width - 5, height: b2.height - 5 }); await wait(300);
+      const b3 = w.getBounds(); // diagnostics: move and resize in one call
       check('window: resizes from its edges', b1.width === b0.width - 100 && b1.height === b0.height - 80 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2, b3 });
     }
 
