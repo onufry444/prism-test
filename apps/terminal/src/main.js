@@ -548,13 +548,15 @@ async function runSmoke() {
     check('window: no console errors', errors.length === 0, errors);
     {
       const b0 = w.getBounds();
-      await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('se', 60, 40))`);
+      await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('se', -100, -80))`);
       await wait(500);
       const b1 = w.getBounds();
       await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('nw', 30, 20))`);
       await wait(500);
       const b2 = w.getBounds();
-      check('window: resizes from its edges', b1.width === b0.width + 60 && b1.height === b0.height + 40 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2 });
+      w.setBounds({ x: b2.x + 5, y: b2.y + 5, width: b2.width, height: b2.height }); await wait(300);
+      const b3 = w.getBounds(); // diagnostics: can the window move at all?
+      check('window: resizes from its edges', b1.width === b0.width - 100 && b1.height === b0.height - 80 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2, b3 });
     }
 
     // 2. shells: aliases, Prism commands, Linux commands, translation through the pipe
