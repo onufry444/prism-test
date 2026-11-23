@@ -1,0 +1,27 @@
+{
+  "name": "Glacier",
+  "author": "Prism",
+  "colors": {
+    "background": "#0e1a24",
+    "foreground": "#e2eef6",
+    "cursor": "#7fd1ff",
+    "selection": "#32556a",
+    "accent": "#7fd1ff",
+    "black": "#27333d",
+    "red": "#ff8080",
+    "green": "#8fe3b0",
+    "yellow": "#f5e08a",
+    "blue": "#7fd1ff",
+    "magenta": "#b5a8ff",
+    "cyan": "#8ff0ec",
+    "white": "#c9d5dd",
+    "brightBlack": "#6d7982",
+    "brightRed": "#ffabab",
+    "brightGreen": "#b3ecca",
+    "brightYellow": "#f8ebb2",
+    "brightBlue": "#aae1ff",
+    "brightMagenta": "#d4ccff",
+    "brightCyan": "#b5f5f2",
+    "brightWhite": "#fafcfe"
+  }
+}

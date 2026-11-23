@@ -25,6 +25,10 @@ const { Elevator } = require('./elevate');
 const { startHandoffServer } = require('./handoff');
 const { Toys } = require('./toys');
 const { Updater } = require('./updater');
+const prismApi = require('./api');
+const { Plugins } = require('./plugins');
+const { Themes } = require('./themes');
+const toysMod = require('./toys');
 const { Integration, runSpecForFile } = require('./integrate');
 const psq = s => "'" + String(s).replace(/'/g, "''") + "'";
 
@@ -54,14 +58,15 @@ const terminals = () => BrowserWindow.getAllWindows().filter(w => w.prismTermina
 const broadcast = (ch, data) => terminals().forEach(w => w.webContents.send(ch, data));
 
 // ---------- shells ----------
-function writeShells() { try { shells.writeAll(SCRIPTS, config.get(), STATIC_SHELL); } catch (e) { console.error('Prism: writing shell files failed', e); } }
+function writeShells() { try { shells.writeAll(SCRIPTS, { ...config.get(), _commands: [...(plugins ? plugins.names() : []), 'plugin', 'ssh', 'theme'] }, STATIC_SHELL); } catch (e) { console.error('Prism: writing shell files failed', e); } }
 function launch(profile, tab) {
   const f = n => path.join(SCRIPTS, n);
   const slash = p => IS_WIN ? p.replace(/\\/g, '/') : p;
   const forShell = p => profile.kind === 'bash' ? slash(p) : p;
   const env = {
     ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Prism', TERM_PROGRAM_VERSION: app.getVersion(),
-    PRISM_INBOX: forShell(INBOX), PRISM_RESULTS: forShell(RESULTS), PRISM_TAB: tab || '', PRISM_PID: String(process.pid), PRISM_ELEVATED: ELEVATED ? '1' : '0'
+    PRISM_INBOX: forShell(INBOX), PRISM_RESULTS: forShell(RESULTS), PRISM_TAB: tab || '', PRISM_PID: String(process.pid), PRISM_ELEVATED: ELEVATED ? '1' : '0',
+    PRISM_API: prismApi.pipeName()
   };
   delete env.PRISM_TEST_ELEVATE;
   if (IS_WIN) env.PRISM_PIPE = PIPE;
@@ -207,7 +212,7 @@ function watchInbox() {
 }
 
 // ---------- config ----------
-let lastShellSig = '', lastLogin = null;
+let lastShellSig = '', lastLogin = null, lastPluginSig = null;
 function setConfig(patch) {
   // picking a color scheme clears custom colors
   if (patch.terminal && 'scheme' in patch.terminal) config.gui.terminal = { ...(config.gui.terminal || {}), colors: {} };
@@ -218,6 +223,8 @@ function setConfig(patch) {
 function onConfigChanged() {
   const cfg = config.get();
   const shellSig = JSON.stringify([cfg.aliases, cfg.prompt, cfg.shell, cfg.admin]);
+  const pluginSig = JSON.stringify(cfg.plugins || {});
+  if (plugins && pluginSig !== lastPluginSig) { const first = lastPluginSig === null; lastPluginSig = pluginSig; if (!first) { plugins.load(); lastShellSig = ''; } }
   if (shellSig !== lastShellSig) { lastShellSig = shellSig; writeShells(); }
   const login = !!cfg.startup.launchAtLogin;
   if (login !== lastLogin && !SMOKE_OUT && app.isPackaged) { lastLogin = login; app.setLoginItemSettings({ openAtLogin: login, args: ['--background'] }); }
@@ -226,7 +233,12 @@ function onConfigChanged() {
   broadcast('config:changed', payload());
 }
 function payload() {
-  return { config: config.get(), css: config.css, overridden: config.overridden, error: config.error, files: { config: CONFIG_FILE, style: STYLE_FILE, dir: CONFIG_DIR } };
+  return {
+    config: config.get(), css: config.css, overridden: config.overridden, error: config.error, files: { config: CONFIG_FILE, style: STYLE_FILE, dir: CONFIG_DIR },
+    // color schemes from your themes folder, the theme store and plugins (they join the built-in ones)
+    themes: { ...(plugins ? plugins.schemes : {}), ...(themes ? themes.user : {}) },
+    plugins: plugins ? plugins.list.map(p => ({ name: p.name, dir: path.basename(p.dir), version: p.version, description: p.description, author: p.author, enabled: p.enabled, commands: p.commands, animations: p.animations, schemes: p.schemes, error: p.error })) : []
+  };
 }
 let shortcut = null;
 function registerShortcut() {
@@ -424,7 +436,8 @@ ipcMain.handle('app:pick-image', async e => {
 });
 ipcMain.on('app:open-file', (e, which) => {
   ensureFiles();
-  const f = { config: CONFIG_FILE, style: STYLE_FILE, dir: CONFIG_DIR, data: DATA }[which];
+  const f = { config: CONFIG_FILE, style: STYLE_FILE, dir: CONFIG_DIR, data: DATA, plugins: path.join(CONFIG_DIR, 'plugins') }[which];
+  if (which === 'plugins') fs.mkdirSync(f, { recursive: true });
   if (f) shell.openPath(f);
 });
 ipcMain.on('win', (e, a) => {
@@ -501,18 +514,140 @@ function startAudio(onBands, onError) {
   w.loadFile(path.join(__dirname, 'renderer', 'audio.html')).then(() => w.webContents.executeJavaScript('start()', true)).catch(e => onError(e.message));
   return () => { ipcMain.removeListener('audio:bands', onB); ipcMain.removeListener('audio:error', onE); if (!w.isDestroyed()) w.destroy(); };
 }
+// ---------- plugins and themes ----------
+let plugins = null, themes = null;
+function startPluginsAndThemes() {
+  plugins = new Plugins({
+    dir: path.join(CONFIG_DIR, 'plugins'),
+    disabled: () => (config.get().plugins && config.get().plugins.disabled) || [],
+    builtin: new Set([...Object.keys(toysMod.NAMES), 'toys', 'imgcat', 'plugin', 'ssh', 'theme', 'sudo', 'settings', 'prism']),
+    fetch: (url, opts) => require('electron').net.fetch(url, opts),
+    onChange: () => { writeShells(); broadcast('config:changed', payload()); }
+  }).load();
+  themes = new Themes({ dir: path.join(CONFIG_DIR, 'themes'), fetch: (url, opts) => require('electron').net.fetch(url, opts), repo: () => (updater ? updater.repo() : 'onufry444/prism') });
+  themes.load();
+  if (!SMOKE_OUT) { plugins.watch(); themes.watch(() => broadcast('config:changed', payload())); }
+}
+ipcMain.handle('themes:store', () => themes.store());
+ipcMain.handle('themes:install', async (e, id) => { await themes.install(id); broadcast('config:changed', payload()); return true; });
+ipcMain.handle('themes:save', (e, id, theme) => { themes.save(id, theme); broadcast('config:changed', payload()); return true; });
+ipcMain.handle('themes:remove', (e, id) => { themes.remove(id); broadcast('config:changed', payload()); return true; });
+ipcMain.handle('plugins:install', async (e, spec) => { const p = await plugins.install(spec); return { name: p.name }; });
+ipcMain.handle('plugins:remove', (e, name) => plugins.remove(name));
+ipcMain.handle('ssh:import', () => readSshConfig());
+// Hosts from ~/.ssh/config (wildcard entries are skipped)
+function readSshConfig() {
+  let text = ''; try { text = fs.readFileSync(path.join(os.homedir(), '.ssh', 'config'), 'utf8'); } catch { return []; }
+  const out = []; let cur = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim(); if (!line) continue;
+    const m = /^(\S+)\s*=?\s*(.+)$/.exec(line); if (!m) continue;
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if (k === 'host') { cur = null; for (const name of v.split(/\s+/)) if (!/[*?!]/.test(name)) { cur = { name, host: name, user: '', port: 22, identityFile: '' }; out.push(cur); } }
+    else if (cur && k === 'hostname') cur.host = v;
+    else if (cur && k === 'user') cur.user = v;
+    else if (cur && k === 'port') cur.port = parseInt(v, 10) || 22;
+    else if (cur && k === 'identityfile') cur.identityFile = v.replace(/^~/, os.homedir());
+  }
+  return out;
+}
+// how a saved server is opened: a tab running OpenSSH (built into Windows 10 and 11)
+function sshSpec(h) {
+  const args = [];
+  if (h.port && +h.port !== 22) args.push('-p', String(h.port));
+  if (h.identityFile) args.push('-i', h.identityFile);
+  args.push((h.user ? h.user + '@' : '') + h.host);
+  return { file: 'ssh.exe', args, title: h.name, ssh: h.name };
+}
+function sshHost(name) { return ((config.get().ssh || {}).hosts || []).find(h => h.name === name || h.host === name); }
+
 function startToys() {
   toys = new Toys({
+    plugins,
+    // commands answered with text: pictures, plugins, saved servers, themes
+    extra: {
+      imgcat: async (tab, args, cwd) => {
+        if (!args.length) return 'usage: imgcat FILE...\n';
+        const t = ptys.get(tab); if (!t || !t.wc.send) return 'imgcat works in a Prism pane.\n';
+        const api = new prismApi.PrismApi({}), out = [];
+        for (const f of args) {
+          try {
+            const img = api.image({ path: f, cwd: cwd || t.cwd || os.homedir() });
+            const r = await new Promise((resolve, reject) => { const rid = ++apiSeq; apiWaiting.set(rid, { resolve, reject, wc: t.wc }); t.wc.send('api:request', { rid, pane: tab, op: 'image', payload: img }); });
+            out.push('\n'.repeat(r.rows || 1));
+          } catch (e) { out.push(`imgcat: ${f}: ${e.message}\n`); }
+        }
+        return out.join('');
+      },
+      plugin: async (tab, args) => {
+        const [sub, ...rest] = args;
+        if (sub === 'install' && rest[0]) { const p = await plugins.install(rest[0]); return `Installed ${p.name}. Its commands work in new tabs: ${[...(p.commands || []), ...(p.animations || [])].join(', ') || '(none)'}\nPlugins run with your rights: only install plugins you trust.\n`; }
+        if (sub === 'remove' && rest[0]) return `Removed ${plugins.remove(rest[0])}.\n`;
+        const list = plugins.list.map(p => `  ${p.name.padEnd(18)} ${p.enabled ? '' : '(off) '}${p.error ? 'error: ' + p.error : [...p.commands, ...p.animations].join(', ')}`).join('\n');
+        return (list || '  no plugins yet') + `\n\nprism plugin install OWNER/REPO · prism plugin remove NAME · folder: ${plugins.host.dir}\n`;
+      },
+      ssh: async (tab, args) => {
+        const hosts = (config.get().ssh || {}).hosts || [];
+        if (!args[0]) return hosts.length ? hosts.map(h => `  ${h.name.padEnd(18)} ${h.user ? h.user + '@' : ''}${h.host}${h.port && +h.port !== 22 ? ':' + h.port : ''}`).join('\n') + '\n' : 'No saved servers yet. Add them in Settings › SSH.\n';
+        const h = sshHost(args[0]) || { name: args[0], host: args[0] };
+        const t = ptys.get(tab); if (t && t.wc.send) t.wc.send('tab:open', { run: sshSpec(h) });
+        return '';
+      },
+      theme: async (tab, args) => {
+        const [sub, id] = args;
+        if (sub === 'install' && id) { await themes.install(id); broadcast('config:changed', payload()); return `Installed ${id}. Pick it in Settings › Appearance, or: prism scheme ${id}\n`; }
+        const list = await themes.store();
+        return 'Theme store:\n' + list.map(t => `  ${t.id.padEnd(18)} ${t.installed ? '✓ ' : ''}${t.name}${t.author ? ' by ' + t.author : ''}`).join('\n') + '\n\nprism theme install NAME\n';
+      }
+    },
     resultsDir: RESULTS,
     version: app.getVersion(),
     display: () => { const d = screen.getPrimaryDisplay(); return `${Math.round(d.size.width * d.scaleFactor)}x${Math.round(d.size.height * d.scaleFactor)}${d.scaleFactor !== 1 ? ` (scaled ${Math.round(d.scaleFactor * 100)}%)` : ''}`; },
     audio: startAudio,
+    fetch: (url, opts) => require('electron').net.fetch(url, opts),
     tab: id => {
       const t = ptys.get(id);
       return t && { cols: t.cols, rows: t.rows, profile: t.profile, send: data => { if (!t.wc.isDestroyed()) t.wc.send('pty:data', { id, data }); } };
     }
   });
 }
+// ---------- Prism API: programs in a pane show images, charts, buttons, forms (src/api.js, renderer/widgets.js) ----------
+const apiWaiting = new Map(); let apiSeq = 0;
+function startApi() {
+  if (!IS_WIN && !process.env.PRISM_API_TEST) return;
+  new prismApi.PrismApi({
+    pane: id => {
+      const t = ptys.get(id);
+      if (!t || t.wc.isDestroyed() || !t.wc.send) return null;
+      return {
+        request: (op, payload) => new Promise((resolve, reject) => {
+          const rid = ++apiSeq;
+          apiWaiting.set(rid, { resolve, reject, wc: t.wc });
+          t.wc.send('api:request', { rid, pane: id, op, payload });
+        })
+      };
+    },
+    notify: (title, body) => {
+      const { Notification } = require('electron');
+      if (Notification.isSupported()) new Notification({ title, body, silent: false }).show();
+      else notify(`${title}: ${body}`);
+    },
+    progress: (id, value, state) => {
+      const t = ptys.get(id); if (!t || t.wc.isDestroyed()) return;
+      if (t.wc.send) t.wc.send('api:progress', { pane: id, value, state });
+      const w = BrowserWindow.fromWebContents(t.wc);
+      if (w) w.setProgressBar(value === null ? -1 : value / 100, { mode: state === 'error' ? 'error' : state === 'paused' ? 'paused' : 'normal' });
+    }
+  }).start();
+}
+ipcMain.on('api:reply', (e, rid, result, error) => {
+  const w = apiWaiting.get(rid); if (!w) return;
+  apiWaiting.delete(rid);
+  if (error) w.reject(new Error(error)); else w.resolve(result || {});
+});
+// a closed window answers nothing: its open requests end
+app.on('web-contents-created', (e, wc) => wc.once('destroyed', () => { for (const [rid, w] of apiWaiting) if (w.wc === wc) { apiWaiting.delete(rid); w.reject(new Error('the window was closed')); } }));
+
 // ---------- updates (Settings > About) ----------
 let updater = null, updateToastFor = null;
 function startUpdater() {
@@ -691,6 +826,79 @@ async function runSmoke() {
       check(`${prof.name}: shell works after toys`, /AFTER_TOYS/.test(plain.split('echo AFTER_TOYS').pop() || ''), plain.slice(-800));
     }
     check('toys: nothing left running', toys.sessions.size === 0, [...toys.sessions.keys()]);
+    // more toys, and a plugin command (CI puts examples/plugins/hello in the plugins folder)
+    {
+      const ps = testable.find(p => p.kind === 'pwsh');
+      const out = plainOf(await runPty(ps, [['cowsay Prism moo', 5000], ['snake', 2500], ['q', 2000], ['hello Ada', 5000], ['fire', 2500], ['q', 2000], ['weather Warsaw', 12000], ['echo AFTER_MORE', 2500], 'exit'], 7000));
+      check('toys: cowsay', /< Prism moo >/.test(out) && /\(o o\)/.test(out), out.slice(0, 1500));
+      check('toys: snake starts and quits', /snake · score 0/.test(out), out.slice(-2000));
+      check('toys: weather answers', /Weather|°|wttr\.in|weather service|internet/i.test(out.split('weather Warsaw').pop() || ''), (out.split('weather Warsaw').pop() || '').slice(0, 1200));
+      check('plugins: example plugin loaded', plugins.list.some(p => p.name === 'hello' && p.commands.includes('hello') && p.animations.includes('fire')), plugins.list);
+      check('plugins: plugin command runs', /Hello, Ada! This is Prism/.test(out), out.slice(-3000));
+      check('plugins: plugin animation runs', /\x1b\[\?1049h|AFTER_MORE/.test(out) && /AFTER_MORE/.test(out.split('echo AFTER_MORE').pop() || ''), out.slice(-800));
+    }
+
+    // Prism API: a program in the pane asks for a picture, a chart, buttons, a form, progress and a title
+    if (IS_WIN) {
+      const paneId = await w.webContents.executeJavaScript('window.Prism.active.id');
+      const sock = net.connect(prismApi.pipeName());
+      await new Promise(r => sock.once('connect', r));
+      sock.setEncoding('utf8');
+      let ibuf = ''; const answers = new Map();
+      sock.on('data', d => { ibuf += d; let i; while ((i = ibuf.indexOf('\n')) >= 0) { const m = JSON.parse(ibuf.slice(0, i)); ibuf = ibuf.slice(i + 1); answers.get(m.id)?.(m); } });
+      let n = 0;
+      const ask = (op, f = {}) => new Promise(res => { const id = ++n; answers.set(id, res); sock.write(JSON.stringify({ id, op, tab: paneId, ...f }) + '\n'); });
+      const hello = await ask('hello');
+      check('api: hello', hello.ok && hello.version >= 1 && hello.ops.includes('image'), hello);
+      const img = await ask('image', { data: 'iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAATklEQVR4nO3PUQkAIBTAwJfTJIY1jCH8OITBAtxmr/N1wwUNaEEDWtCAFjSgBQ1oQQNa0IAWNKAFDWhBA1rQgBY0oAUNaEEDWtCAFjx2AXfTcMT7uhRvAAAAAElFTkSuQmCC' });
+      const chartA = await ask('chart', { type: 'bar', title: 'Test', labels: ['a', 'b', 'c'], series: [{ name: 's', values: [1, 3, 2] }], height: 8 });
+      await wait(800);
+      const shown = await w.webContents.executeJavaScript(`document.querySelectorAll('.pwidget img').length`);
+      check('api: image and chart are drawn in the pane', img.ok && img.rows > 0 && chartA.ok && chartA.rows === 8 && shown >= 2, { img, chartA, shown });
+      const chosen = ask('choose', { prompt: 'Pick', options: ['red', 'green', 'blue'] });
+      await wait(800);
+      await w.webContents.executeJavaScript(`(() => { const b = document.querySelector('.pchoose button[data-i="1"]'); b && b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return !!b; })()`);
+      const ch = await Promise.race([chosen, wait(5000).then(() => ({ timeout: true }))]);
+      check('api: buttons answer with the choice', ch.ok && ch.choice === 'green', ch);
+      const formP = ask('form', { title: 'Login', fields: [{ name: 'user', label: 'User' }, { name: 'remember', label: 'Remember me', type: 'checkbox' }] });
+      await wait(800);
+      await w.webContents.executeJavaScript(`(() => { const f = document.querySelector('.pform form'); if (!f) return false; f.querySelector('#pf0').value = 'ada'; f.querySelector('#pf1').checked = true; f.requestSubmit(); return true; })()`);
+      const fr = await Promise.race([formP, wait(5000).then(() => ({ timeout: true }))]);
+      check('api: form returns the values', fr.ok && fr.values && fr.values.user === 'ada' && fr.values.remember === true, fr);
+      await ask('progress', { value: 60 }); await ask('title', { text: 'API title' });
+      await wait(500);
+      const tabUi = await w.webContents.executeJavaScript(`({ pg: !!document.querySelector('.tab.on .pg'), title: document.querySelector('.tab.on .t').textContent })`);
+      check('api: progress and title', tabUi.pg && tabUi.title === 'API title', tabUi);
+      await ask('progress', { value: null });
+      const bad = await ask('image', { tab: 'nope', data: 'AAAA' });
+      check('api: refuses bad requests', !bad.ok && !!bad.error, bad);
+      sock.destroy();
+      // imgcat from the shell
+      const pngFile = path.join(os.tmpdir(), 'prism-test.png');
+      fs.writeFileSync(pngFile, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAATklEQVR4nO3PUQkAIBTAwJfTJIY1jCH8OITBAtxmr/N1wwUNaEEDWtCAFjSgBQ1oQQNa0IAWNKAFDWhBA1rQgBY0oAUNaEEDWtCAFjx2AXfTcMT7uhRvAAAAAElFTkSuQmCC', 'base64'));
+      const before = await w.webContents.executeJavaScript(`document.querySelectorAll('.pwidget img').length`);
+      await w.webContents.executeJavaScript(`window.Prism.typeInActive(${JSON.stringify('imgcat ' + pngFile + '\r')})`);
+      await wait(6000);
+      const after = await w.webContents.executeJavaScript(`document.querySelectorAll('.pwidget img').length`);
+      check('api: imgcat shows a picture', after > before, { before, after });
+    }
+
+    // theme store (from this repository) and saved SSH servers
+    if (process.env.PRISM_TEST_REPO) {
+      let list = []; try { list = await themes.store(); } catch (e) { list = [{ error: e.message }]; }
+      check('themes: the store lists themes', list.length >= 10 && list.every(t => t.id && t.preview), list.slice(0, 2));
+      try { await themes.install('aurora'); } catch {}
+      check('themes: install from the store', !!themes.user.aurora && payload().themes.aurora, Object.keys(themes.user));
+    }
+    if (IS_WIN) {
+      setConfig({ ssh: { hosts: [{ name: 'nowhere', host: '127.0.0.1', port: 1 }] } });
+      await wait(400);
+      const id = await w.webContents.executeJavaScript(`window.Prism.openSsh('nowhere').then(p => p && p.id)`);
+      await wait(6000);
+      const r = await w.webContents.executeJavaScript(`(() => { const p = window.Prism.paneById(${JSON.stringify(id)}), b = p && p.term.buffer.active; return { title: p && p.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+      check('ssh: a saved server opens a tab with OpenSSH', /ssh|connect|refused/i.test(r.text) && /exited with code/.test(r.text), r);
+    }
+
 
     // 3. a tab that runs one program, and stays open with its exit code
     {
@@ -780,6 +988,7 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     else if (!args.includes('--background')) { if (terminals().some(w => w.isVisible())) openTerminal(); else onPrismAction('open'); }
   });
   app.whenReady().then(() => {
+    startPluginsAndThemes();
     lastShellSig = JSON.stringify([config.get().aliases, config.get().prompt, config.get().shell, config.get().admin]);
     writeShells();
     watchInbox();
@@ -787,6 +996,7 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     startElevator();
     startToys();
     startIntegration();
+    startApi();
     config.onChange(() => onConfigChanged());
     if (SMOKE_OUT) return runSmoke();
     undoOldDesktop();

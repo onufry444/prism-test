@@ -611,7 +611,7 @@ function global:__prism_admin_retry([bool]$ok, $code) {
 }
 
 # ------------------------------------------------------------------ toys (drawn by Prism in this tab)
-foreach ($t in 'fetch', 'lava', 'matrix', 'pipes', 'donut', 'clock', 'visualizer', 'cava', 'toys') {
+foreach ($t in @($global:PrismCommands)) {
   if (-not (Get-Command $t -CommandType Application -ErrorAction SilentlyContinue)) {
     Set-Item -Path "function:global:$t" -Value ([scriptblock]::Create("__prism_toy '$t' `$args"))
   }
@@ -644,6 +644,9 @@ function global:prism {
       return
     }
     'unalias' { foreach ($n in $rest) { __prism_msg "remove;$n" }; return }
+    'plugin' { __prism_toy 'plugin' ([string[]]$rest); return }
+    'ssh' { __prism_toy 'ssh' ([string[]]$rest); return }
+    'theme' { __prism_toy 'theme' ([string[]]$rest); return }
     'help' {
       "$e[1mPrism$e[0m commands"
       '  settings                 open settings (appearance, shell, admin, aliases, keys)'
@@ -652,6 +655,10 @@ function global:prism {
       '  prism opacity 0-100      terminal transparency prism font-size 10-28'
       '  prism scheme NAME        terminal color scheme prism reload'
       '  sudo COMMAND             run one command as administrator, in this tab'
+      '  imgcat FILE              show a picture'
+      '  prism ssh [NAME]         connect to a saved server (no name: list them)'
+      '  prism plugin list | install OWNER/REPO | remove NAME'
+      '  prism theme list | install NAME'
       '  prism version | update | uninstall'
       ''
       "$e[1mLinux commands$e[0m: ls -la, rm -rf, cp -r, mkdir -p, grep -rn, touch, which, head, tail, wc, df -h, du -sh, free -h,"

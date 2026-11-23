@@ -8,6 +8,9 @@ const MAC = api.platform === 'darwin';
 const rgb = h => { const n = parseInt(String(h).slice(1), 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
 const hexA = (h, a) => { const [r, g, b] = rgb(h); return `rgba(${r},${g},${b},${a})`; };
 const SCHEMES = window.PRISM_SCHEMES;
+const BUILTIN = { ...SCHEMES };
+// schemes from your themes folder, the theme store and plugins join the built-in ones
+function mergeThemes(extra) { for (const k of Object.keys(SCHEMES)) if (!BUILTIN[k]) delete SCHEMES[k]; Object.assign(SCHEMES, extra || {}, BUILTIN); }
 
 const P = window.Prism = { api, $, esc, rgb, hexA, MAC, SCHEMES, C: null, cfg: null, profiles: [], tabs: [], active: null };
 const events = {};
@@ -105,6 +108,7 @@ async function startPane(pane, profileId, cwd, opts = {}) {
     pane.term.write('\x1b[2m' + opts.lines.join('\r\n') + '\x1b[0m\r\n\x1b[90m── restored ' + new Date(opts.savedAt || Date.now()).toLocaleString() + ' ──\x1b[0m' + '\r\n'.repeat(pane.term.rows));
   }
   const { term } = pane;
+  pane.run = opts.run || null;
   const r = opts.adopt ? await api.adopt(pane.id, term.cols, term.rows) : await api.create(pane.id, profileId, term.cols, term.rows, cwd, opts.run || null, opts.cwdFrom || opts.cwdOf || null);
   if (!r.ok && opts.adopt) { closePane(pane, true); return null; }
   pane.profile = r.profile;
@@ -204,6 +208,7 @@ function closePane(pane, fromExit) {
   const tab = pane.tab;
   if (!fromExit) api.kill(pane.id);
   clearTimeout(pane.rt);
+  P.emit('pane-closed', pane);
   pane.term.dispose(); pane.el.remove();
   tab.panes.splice(tab.panes.indexOf(pane), 1);
   if (!tab.panes.length) return closeTab(tab, true);
@@ -215,7 +220,7 @@ function closePane(pane, fromExit) {
 }
 function closeTab(tab, panesGone) {
   if (!tab) return;
-  if (!panesGone) for (const p of tab.panes.splice(0)) { api.kill(p.id); clearTimeout(p.rt); p.term.dispose(); }
+  if (!panesGone) for (const p of tab.panes.splice(0)) { api.kill(p.id); clearTimeout(p.rt); P.emit('pane-closed', p); p.term.dispose(); }
   tab.view.remove();
   const i = P.tabs.indexOf(tab);
   P.tabs.splice(i, 1);
@@ -251,9 +256,11 @@ function resizePane(pane, dir) {
 function renderTabs() {
   $('#tabs').innerHTML = P.tabs.map((t, i) => {
     const f = t.focus || t.panes[0], admin = t.panes.some(p => p.admin) || P.elevated, title = f ? f.title : '…';
-    return `<button class="tab${t === P.tab ? ' on' : ''}${admin ? ' admin' : ''}" data-i="${i}" title="${esc(title)}${admin && !P.elevated ? ' (running as administrator)' : ''}">${admin ? '<span class="sh" aria-label="administrator">⚡</span>' : ''}<span class="t">${esc(title)}</span>${t.panes.length > 1 ? `<span class="np" title="${t.panes.length} panes">${t.panes.length}</span>` : ''}<span class="x" data-x="${i}" aria-label="Close tab">×</span></button>`;
+    const pg = t.panes.map(p => p.progress).find(Boolean); // progress reported by a program (Prism API)
+    return `<button class="tab${t === P.tab ? ' on' : ''}${admin ? ' admin' : ''}" data-i="${i}" title="${esc(title)}${admin && !P.elevated ? ' (running as administrator)' : ''}">${admin ? '<span class="sh" aria-label="administrator">⚡</span>' : ''}<span class="t">${esc(title)}</span>${t.panes.length > 1 ? `<span class="np" title="${t.panes.length} panes">${t.panes.length}</span>` : ''}<span class="x" data-x="${i}" aria-label="Close tab">×</span>${pg ? `<i class="pg ${pg.state}" style="width:${pg.value}%"></i>` : ''}</button>`;
   }).join('');
 }
+P.renderTabs = renderTabs;
 P.typeInActive = text => { if (!P.active) return; P.closeSettings?.(); api.write(P.active.id, text); P.active.term.focus(); };
 $('#tabs').addEventListener('mousedown', e => {
   const x = e.target.closest('[data-x]'), b = e.target.closest('.tab');
@@ -272,6 +279,15 @@ $('#profiles').addEventListener('click', e => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('.newtab')) $('#profiles').hidden = true; });
 $('#logo').addEventListener('click', () => api.menu());
+// saved SSH servers (Settings > SSH) open in a new tab
+P.openSsh = name => {
+  const h = ((P.cfg.ssh || {}).hosts || []).find(x => x.name === name); if (!h) return;
+  const args = [];
+  if (h.port && +h.port !== 22) args.push('-p', String(h.port));
+  if (h.identityFile) args.push('-i', h.identityFile);
+  args.push((h.user ? h.user + '@' : '') + h.host);
+  return P.newTab(null, null, { run: { file: 'ssh.exe', args, title: h.name, ssh: h.name } });
+};
 new ResizeObserver(fitActive).observe($('#terms'));
 function renderProfilesMenu() {
   const ssh = (P.cfg.ssh && P.cfg.ssh.hosts) || [];
@@ -290,7 +306,7 @@ function lastLines(pane, n = 400) {
   return out;
 }
 function snapshot() {
-  const ser = n => n.pane ? { pane: n.pane.id, profile: n.pane.profile && !['run', 'console'].includes(n.pane.profile.kind) ? n.pane.profile.id : null, lines: lastLines(n.pane) }
+  const ser = n => n.pane ? { pane: n.pane.id, profile: n.pane.profile && !['run', 'console'].includes(n.pane.profile.kind) ? n.pane.profile.id : null, ssh: n.pane.run && n.pane.run.ssh ? n.pane.run : null, lines: lastLines(n.pane) }
     : { dir: n.dir, ratio: n.ratio, a: ser(n.a), b: ser(n.b) };
   return { savedAt: Date.now(), active: P.tabs.indexOf(P.tab), tabs: P.tabs.map(t => ({ root: ser(t.root), focus: t.panes.indexOf(t.focus) })) };
 }
@@ -324,7 +340,7 @@ async function restore(s) {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   for (const tab of P.tabs) {
     fitTab(tab); // hidden tabs keep their layout, so they can be measured too
-    for (const p of tab.panes) startPane(p, p.restore.profile, null, { cwdOf: p.restore.pane, lines: p.restore.lines, savedAt: s.savedAt });
+    for (const p of tab.panes) startPane(p, p.restore.profile, null, { cwdOf: p.restore.pane, lines: p.restore.lines, savedAt: s.savedAt, run: p.restore.ssh || null });
   }
   return true;
 }
@@ -332,6 +348,7 @@ async function restore(s) {
 // ---------- keyboard ----------
 function keys(e, t) {
   if (e.type !== 'keydown') return true;
+  if (t.widgetKeys) { e.preventDefault(); return t.widgetKeys(e); } // buttons shown by a program take the keys
   const K = P.cfg.keys, stop = () => { e.preventDefault(); return false; };
   if (keyMatch(e, K.newTab) || (MAC && e.metaKey && e.key === 't')) { P.newTab(); return stop(); }
   if (keyMatch(e, K.closeTab) || (MAC && e.metaKey && e.key === 'w')) { closePane(t); return stop(); }
@@ -397,7 +414,7 @@ api.onTranslated(({ to, dialects }) => {
   clearTimeout(chipT); chipT = setTimeout(() => el.classList.remove('show'), 3500);
 });
 api.onAppCommand(c => { if (c.startsWith('settings')) P.openSettings(c.slice(9)); else if (c === 'split-right') P.split('row'); else if (c === 'split-down') P.split('col'); else P.newTab(); });
-api.onConfig(C => { P.C = C; P.cfg = C.config; applyLook(); P.emit('config'); });
+api.onConfig(C => { P.C = C; P.cfg = C.config; mergeThemes(C.themes); applyLook(); P.emit('config'); });
 
 // ---------- window ----------
 $('#wc').addEventListener('click', e => { const b = e.target.closest('[data-w]'); if (b) api.win(b.dataset.w); });
@@ -416,13 +433,14 @@ document.querySelectorAll('.rz i').forEach(h => h.addEventListener('pointerdown'
   const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('lostpointercapture', up); if (last) api.resizeTo(edge, last.screenX - x0, last.screenY - y0); };
   h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('lostpointercapture', up);
 }));
-api.onData(({ id, data }) => P.paneById(id)?.term.write(data));
+api.onData(({ id, data }) => { const p = P.paneById(id); if (p) { p.lastData = Date.now(); p.term.write(data); } });
 api.onExit(({ id }) => closePane(P.paneById(id), true));
 api.onOpenTab(req => P.newTab(null, req.cwd || null, req));
 api.onAdmin(({ id, on }) => { const p = P.paneById(id); if (p) { p.admin = on; renderTabs(); } });
 
 api.init().then(async C => {
   P.C = C; P.cfg = C.config; P.profiles = C.profiles; P.translateAvailable = C.translateAvailable; P.version = C.version; P.elevated = C.elevated; P.platform = C.platform;
+  mergeThemes(C.themes);
   applyLook();
   const first = C.startup.open;
   if (!(C.startup.restore && !first && await restore(C.startup.restore))) await P.newTab(null, first?.cwd || null, first || {});

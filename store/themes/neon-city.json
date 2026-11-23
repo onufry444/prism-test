@@ -1,0 +1,27 @@
+{
+  "name": "Neon City",
+  "author": "Prism",
+  "colors": {
+    "background": "#0d0221",
+    "foreground": "#e6e6ff",
+    "cursor": "#ff2a6d",
+    "selection": "#5a0f39",
+    "accent": "#ff2a6d",
+    "black": "#271d3c",
+    "red": "#ff2a6d",
+    "green": "#05ffa1",
+    "yellow": "#fffb96",
+    "blue": "#01cdfe",
+    "magenta": "#b967ff",
+    "cyan": "#00fff5",
+    "white": "#cccbe4",
+    "brightBlack": "#6f6985",
+    "brightRed": "#ff6595",
+    "brightGreen": "#46ffba",
+    "brightYellow": "#fffcbd",
+    "brightBlue": "#43dafe",
+    "brightMagenta": "#cf97ff",
+    "brightCyan": "#42fff8",
+    "brightWhite": "#ffffff"
+  }
+}

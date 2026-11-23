@@ -1,0 +1,27 @@
+{
+  "name": "Forest Night",
+  "author": "Prism",
+  "colors": {
+    "background": "#0f1410",
+    "foreground": "#d9e3d1",
+    "cursor": "#c3e66e",
+    "selection": "#49572e",
+    "accent": "#c3e66e",
+    "black": "#272d27",
+    "red": "#e56b5d",
+    "green": "#8fc46a",
+    "yellow": "#c3e66e",
+    "blue": "#6f9fc0",
+    "magenta": "#b88fc4",
+    "cyan": "#6fc2a6",
+    "white": "#c1caba",
+    "brightBlack": "#6a7167",
+    "brightRed": "#ed968c",
+    "brightGreen": "#aed493",
+    "brightYellow": "#d5ee9a",
+    "brightBlue": "#97bad2",
+    "brightMagenta": "#cdb1d6",
+    "brightCyan": "#97d3bf",
+    "brightWhite": "#eff3eb"
+  }
+}

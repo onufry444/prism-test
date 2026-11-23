@@ -72,6 +72,10 @@ const DEFAULTS = {
     focusLeft: 'Alt+Left', focusRight: 'Alt+Right', focusUp: 'Alt+Up', focusDown: 'Alt+Down',
     resizeLeft: 'Alt+Shift+Left', resizeRight: 'Alt+Shift+Right', resizeUp: 'Alt+Shift+Up', resizeDown: 'Alt+Shift+Down'
   },
+  // saved servers for SSH tabs: { name, host, user, port, identityFile }
+  ssh: { hosts: [] },
+  // plugins in ~/.config/prism/plugins that are switched off (by folder name)
+  plugins: { disabled: [] },
   windows: {
     // console apps started anywhere in Windows open in a Prism tab (needs Windows Terminal's console host)
     defaultTerminal: false,

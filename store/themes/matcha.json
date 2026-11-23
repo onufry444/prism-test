@@ -1,0 +1,27 @@
+{
+  "name": "Matcha",
+  "author": "Prism",
+  "colors": {
+    "background": "#151a14",
+    "foreground": "#e3e8d6",
+    "cursor": "#9ccf6b",
+    "selection": "#405430",
+    "accent": "#9ccf6b",
+    "black": "#2e332b",
+    "red": "#e07b6a",
+    "green": "#9ccf6b",
+    "yellow": "#e8cf7a",
+    "blue": "#79a8c9",
+    "magenta": "#c19bd0",
+    "cyan": "#7fc8b4",
+    "white": "#cacfbf",
+    "brightBlack": "#72776b",
+    "brightRed": "#e9a296",
+    "brightGreen": "#b8dd95",
+    "brightYellow": "#efdea3",
+    "brightBlue": "#a0c1d9",
+    "brightMagenta": "#d5bbdf",
+    "brightCyan": "#a4d8ca",
+    "brightWhite": "#f4f6ef"
+  }
+}

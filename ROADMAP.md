@@ -1,6 +1,8 @@
 # Prism roadmap
 
-## Planned (chosen in the November 2026 survey)
+## Chosen in the November 2026 survey
+
+All eight are in Prism 0.9.
 
 | # | Feature | What it means |
 |---|---|---|
@@ -13,7 +15,6 @@
 | 14 | **More toys** | bonsai, stars, aquarium, snake, `weather`, `cowsay`… |
 | 19 | **Plugins** | Anyone can add their own feature to Prism. |
 
-Suggested order: 11 → 2 → 14 → 1 + 6 + 19 (they share one foundation: programs and plugins talking to Prism) → 7 → 9.
 
 ## Later
 
@@ -35,4 +36,6 @@ Suggested order: 11 → 2 → 14 → 1 + 6 + 19 (they share one foundation: prog
 - 0.4: Prism is a terminal only; administrator rights per command (`sudo`, ask before admin-only tools)
 - 0.5: Prism as the default terminal of Windows, `prism run`, Explorer menu entries
 - 0.6: toys: fetch, lava, matrix, pipes, donut, clock, visualizer
-- 0.7: reliable installer, updates from Settings
+- 0.7: reliable installer, updates from Settings; 0.7.1: resizing the window from its edges
+- 0.8: split panes, tabs come back after a restart, no garbled text after resizing
+- 0.9: Prism API (images, charts, buttons, forms, progress, notifications) with Node and Python libraries, `imgcat`, plugins, theme store, saved SSH servers, more toys (bonsai, stars, aquarium, snake, weather, cowsay)

@@ -11,6 +11,8 @@ const patchOf = (p, v) => { const o = {}; set(o, p, v); return o; };
 const ICON = {
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/>',
   shell: '<path d="M4 17l6-5-6-5M12 19h8"/>',
+  plugins: '<path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"/>',
+  ssh: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
   windows: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
   admin: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
   aliases: '<path d="M9 5H7a2 2 0 0 0-2 2v3l-2 2 2 2v3a2 2 0 0 0 2 2h2M15 5h2a2 2 0 0 1 2 2v3l2 2-2 2v3a2 2 0 0 1-2 2h-2"/>',
@@ -23,6 +25,8 @@ const SECTIONS = [
   { id: 'shell', name: 'Shell & prompt', sub: 'Default shell, command translation, Linux commands and the prompt.', pv: 'prompt' },
   { id: 'admin', name: 'Administrator', sub: 'Run Prism as a normal user. When a command needs admin rights, Prism asks and runs just that command elevated.', pv: null },
   { id: 'windows', name: 'Windows', sub: 'Use Prism for every console app, not just the ones you start from Prism.', pv: null },
+  { id: 'ssh', name: 'SSH', sub: 'Your servers, one click away. Passwords are typed in the tab and never saved.', pv: null },
+  { id: 'plugins', name: 'Plugins', sub: 'Extra commands, animations and color schemes made by others, or by you.', pv: null },
   { id: 'aliases', name: 'Aliases', sub: 'Your own commands. They work in every shell, with arguments and pipes.', pv: null },
   { id: 'keys', name: 'Keyboard', sub: 'Shortcuts. Click a field and press the keys you want.', pv: null },
   { id: 'files', name: 'Config files', sub: 'Prefer text files? Everything here can be set in config.jsonc and styled with style.css. They reload when you save.', pv: null },
@@ -30,7 +34,7 @@ const SECTIONS = [
 ];
 P.sectionIds = SECTIONS.map(s => s.id);
 const SEC = id => SECTIONS.find(s => s.id === id);
-const ALIAS = { appearance: 'terminal', look: 'terminal', colors: 'terminal', theme: 'terminal', themes: 'terminal', font: 'terminal', cmd: 'aliases', commands: 'aliases', alias: 'aliases', prompt: 'shell', translate: 'shell', sudo: 'admin', elevation: 'admin', windows: 'windows', default: 'windows', explorer: 'windows', integration: 'windows', config: 'files', keyboard: 'keys', shortcuts: 'keys' };
+const ALIAS = { appearance: 'terminal', look: 'terminal', colors: 'terminal', theme: 'terminal', themes: 'terminal', font: 'terminal', cmd: 'aliases', commands: 'aliases', alias: 'aliases', prompt: 'shell', translate: 'shell', sudo: 'admin', elevation: 'admin', windows: 'windows', ssh: 'ssh', servers: 'ssh', plugins: 'plugins', plugin: 'plugins', store: 'terminal', default: 'windows', explorer: 'windows', integration: 'windows', config: 'files', keyboard: 'keys', shortcuts: 'keys' };
 const ANSI_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'];
 const SEGMENTS = { userhost: 'user@host', path: 'Folder', git: 'Git branch', venv: 'Python venv', duration: 'Command time', status: 'Exit status', time: 'Clock', shell: 'Shell name' };
 const KEYS = { newTab: 'New tab', closeTab: 'Close tab', nextTab: 'Next tab', prevTab: 'Previous tab', newWindow: 'New window', settings: 'Settings', search: 'Find', copy: 'Copy', paste: 'Paste', zoomIn: 'Bigger text', zoomOut: 'Smaller text', zoomReset: 'Reset text size', toggleWindow: 'Show/hide Prism from anywhere', splitRight: 'Split pane right', splitDown: 'Split pane down', focusLeft: 'Pane on the left', focusRight: 'Pane on the right', focusUp: 'Pane above', focusDown: 'Pane below', resizeLeft: 'Pane narrower/wider ←', resizeRight: 'Pane wider/narrower →', resizeUp: 'Pane shorter/taller ↑', resizeDown: 'Pane taller/shorter ↓' };
@@ -78,7 +82,7 @@ function renderNav() {
     + '<div class="hint"><kbd>Esc</kbd> back to the terminal</div>';
 }
 function renderSection() {
-  const R = { terminal: secTerminal, shell: secShell, admin: secAdmin, windows: secWindows, aliases: secAliases, keys: secKeys, files: secFiles, about: secAbout };
+  const R = { terminal: secTerminal, shell: secShell, admin: secAdmin, windows: secWindows, ssh: secSsh, plugins: secPlugins, aliases: secAliases, keys: secKeys, files: secFiles, about: secAbout };
   $('#sContent').innerHTML = R[st.section]();
 }
 function updatePreview() {
@@ -140,6 +144,7 @@ function secTerminal() {
   const schemes = Object.entries(P.SCHEMES).map(([id, s]) => `<button class="pre${t.scheme === id && !custom ? ' on' : ''}" data-scheme="${id}" style="background:${s.background};color:${s.foreground}">
       <span class="sw">${[s.red, s.green, s.yellow, s.blue, s.magenta].map(c => `<i style="background:${c}"></i>`).join('')}</span>${esc(s.name)}</button>`).join('');
   return group('Color scheme' + lock('terminal.scheme'), `<div class="presets">${schemes}</div>${custom ? '<p class="note">Your own colors are on top of the scheme. Picking a scheme resets them.</p>' : ''}`)
+    + storeBox()
     + group('Background', range('data-c', 'terminal.opacity', 'Opacity', 0, 100, '%') + toggle('data-c', 'terminal.blur', 'Blur the desktop behind the window', 'Applies to new windows.')
       + `<div class="row">${label('Background image' + lock('terminal.backgroundImage'), t.backgroundImage ? esc(t.backgroundImage.split(/[\\/]/).pop()) : 'Optional, shown behind the text')}<span class="btns"><button class="btn ghost" data-bgimg>Choose…</button>${t.backgroundImage ? '<button class="btn ghost" data-bgclear>Remove</button>' : ''}</span></div>`
       + (t.backgroundImage ? range('data-c', 'terminal.backgroundImageOpacity', 'Image visibility', 0, 1, '', .02) : ''))
@@ -151,6 +156,24 @@ function secTerminal() {
       + seg('data-c', 'terminal.cursor', [['bar', 'Bar'], ['block', 'Block'], ['underline', 'Underline']], 'Cursor') + toggle('data-c', 'terminal.cursorBlink', 'Blinking cursor')
       + toggle('data-c', 'terminal.copyOnSelect', 'Copy text as soon as you select it') + toggle('data-c', 'terminal.rightClickPaste', 'Right-click pastes'));
 }
+// ---------- theme store ----------
+function storeBox() {
+  const s = st.store;
+  const card = t => {
+    const c = t.preview || {};
+    return `<div class="tcard2" style="background:${c.background || '#222'};color:${c.foreground || '#eee'}">
+      <b>${esc(t.name)}</b><small>${esc(t.author ? 'by ' + t.author : '')}</small>
+      <span class="sw">${['red', 'green', 'yellow', 'blue', 'magenta', 'cyan'].map(k => `<i style="background:${c[k] || '#888'}"></i>`).join('')}</span>
+      ${t.installed || P.SCHEMES[t.id] ? `<button class="btn ghost sm" data-tuse="${esc(t.id)}">Use</button>` : `<button class="btn sm" data-tinstall="${esc(t.id)}">Install</button>`}</div>`;
+  };
+  const body = !s ? '<p class="note">Themes made by the Prism community. Install one with a click.</p><div class="btns"><button class="btn ghost" data-store>Browse the theme store</button></div>'
+    : s.loading ? '<p class="note">Loading the store…</p>'
+    : s.error ? `<div class="notice err">${esc(s.error)}</div><div class="btns"><button class="btn ghost" data-store>Try again</button></div>`
+    : `<div class="tgrid2">${s.list.map(card).join('')}</div>`;
+  return group('Theme store', body + `<div class="btns" style="margin-top:12px"><button class="btn ghost" data-tsave>Save my colors as a theme</button><button class="btn ghost" data-tshare>Share my colors</button></div>
+    <p class="note">Shared themes go into the store through GitHub: Prism copies your theme and opens the page that explains the rest.</p>`);
+}
+
 function secShell() {
   const s = P.cfg.shell, p = P.cfg.prompt;
   return group('Shell', `<div class="field"><span>New tabs open${lock('shell.default')}</span><select data-c="shell.default" ${over('shell.default') ? 'disabled' : ''}>${P.profiles.map(x => `<option value="${esc(x.id)}" ${x.id === s.default ? 'selected' : ''}>${esc(x.name)}${x.prism ? ' (recommended)' : ''}</option>`).join('')}</select></div>`
@@ -161,7 +184,7 @@ function secShell() {
       + toggle('data-c', 'shell.predictions', 'Suggestions from history while you type', 'PowerShell 7. Press → to accept.'))
     + group('Startup', toggle('data-c', 'startup.restoreTabs', 'Reopen tabs and panes from last time', 'With their folders and the end of their output. Programs that were running are not started again.'))
     + group('Toys', toggle('data-c', 'shell.fetchOnStart', 'Show system info in new tabs', 'Like fastfetch in a Linux .bashrc (Prism shell).')
-      + '<p class="note">Try <code class="k">fetch</code> <code class="k">lava</code> <code class="k">matrix</code> <code class="k">pipes</code> <code class="k">donut</code> <code class="k">clock</code> <code class="k">visualizer</code> in any tab. <code class="k">q</code> quits, <code class="k">t</code> changes the lava colors.</p>')
+      + '<p class="note">Try <code class="k">fetch</code> <code class="k">lava</code> <code class="k">matrix</code> <code class="k">pipes</code> <code class="k">donut</code> <code class="k">clock</code> <code class="k">visualizer</code> <code class="k">bonsai</code> <code class="k">stars</code> <code class="k">aquarium</code> <code class="k">snake</code> <code class="k">weather</code> <code class="k">cowsay</code> in any tab (<code class="k">toys</code> lists them). <code class="k">q</code> quits, <code class="k">t</code> changes the lava colors.</p>')
     + group('Prompt', seg('data-c', 'prompt.style', [['auto', 'Auto'], ['prism', 'Prism'], ['keep', 'Keep mine']], 'Style') + '<p class="note">Auto keeps oh-my-posh or Starship if you use them. Changes show in new tabs and after the next command.</p>'
       + `<div class="field"><span>Segments, in order${lock('prompt.segments')}</span>${chips('prompt.segments', SEGMENTS, p.segments || [])}</div>`
       + text('data-c', 'prompt.symbol', 'Symbol', '', '❯') + toggle('data-c', 'prompt.newline', 'Type on a new line') + toggle('data-c', 'prompt.blankLine', 'Blank line between commands')
@@ -185,6 +208,35 @@ api.onIntegration(s => {
   P.integration = { ...s, defaultTerminal: { ...s.defaultTerminal, console: s.defaultTerminal.console === undefined ? prev.console : s.defaultTerminal.console } };
   if (!$('#settings').hidden && st.section === 'windows') renderSection();
 });
+function secSsh() {
+  const hosts = (P.cfg.ssh && P.cfg.ssh.hosts) || [], ed = st.sshEdit;
+  const list = hosts.length ? hosts.map((h, i) => `<li><b>${esc(h.name)}</b><button data-sshgo="${i}">Connect</button><button data-sshed="${i}">Edit</button><button data-sshdel="${i}">Delete</button><small>${esc((h.user ? h.user + '@' : '') + h.host + (h.port && +h.port !== 22 ? ':' + h.port : ''))}</small></li>`).join('')
+    : '<li class="empty">No servers yet.</li>';
+  const h = ed != null ? hosts[ed] || {} : {};
+  return group('Servers' + lock('ssh'), `<ul class="cmds">${list}</ul><div class="btns"><button class="btn ghost" data-sshimport>Import from ~/.ssh/config</button></div>
+      <p class="note">Also in the <b>⌄</b> menu next to <b>+</b>, and in any tab: <code class="k">prism ssh NAME</code>. Uses the OpenSSH client built into Windows.</p>`)
+    + group(ed != null ? `Edit ${esc(h.name || '')}` : 'Add a server', `<form id="sshForm" style="display:grid;gap:12px">
+      <div class="field"><span>Name</span><input id="sName" value="${esc(h.name || '')}" placeholder="e.g. my-vps" spellcheck="false" required></div>
+      <div class="field"><span>Host</span><input id="sHost" value="${esc(h.host || '')}" placeholder="example.com or 10.0.0.5" spellcheck="false" required></div>
+      <div class="field"><span>User (optional)</span><input id="sUser" value="${esc(h.user || '')}" spellcheck="false"></div>
+      <div class="field"><span>Port</span><input id="sPort" type="number" min="1" max="65535" value="${esc(h.port || 22)}"></div>
+      <div class="field">${label('Key file (optional)', 'For example C:\\Users\\you\\.ssh\\id_ed25519. Without one, ssh asks for the password in the tab.')}<input id="sKey" value="${esc(h.identityFile || '')}" spellcheck="false"></div>
+      <p class="err" id="sErr"></p>
+      <div class="btns"><button class="btn" type="submit">Save</button>${ed != null ? '<button class="btn ghost" type="button" data-sshcancel>Cancel</button>' : ''}</div></form>`);
+}
+function secPlugins() {
+  const list = P.C.plugins || [];
+  const items = list.length ? list.map(p => `<li><b>${esc(p.name)}</b>${p.version ? `<em class="ver">${esc(p.version)}</em>` : ''}
+      <label class="sw-t mini" title="On / off"><input type="checkbox" data-ptoggle="${esc(p.dir)}" ${p.enabled ? 'checked' : ''}><i></i></label><button data-premove="${esc(p.dir)}">Remove</button>
+      <small>${p.error ? `<span class="perr">${esc(p.error)}</span>` : esc(p.description || '')}${p.enabled && !p.error ? `<br>${[...p.commands, ...p.animations].map(c => `<code class="k">${esc(c)}</code>`).join(' ')}${p.schemes.length ? ` · ${p.schemes.length} color scheme${p.schemes.length > 1 ? 's' : ''}` : ''}` : ''}</small></li>`).join('')
+    : '<li class="empty">No plugins yet.</li>';
+  return group('Installed', `<ul class="cmds">${items}</ul>`)
+    + group('Install from GitHub', `<form id="plForm" class="inline"><input id="plSpec" placeholder="owner/repository" spellcheck="false" autocapitalize="off"><button class="btn" type="submit">Install</button></form><p class="err" id="plErr"></p>
+      <div class="notice">Plugins run inside Prism with your rights, like any program you install. Only install plugins you trust.</div>
+      <p class="note">In any tab: <code class="k">prism plugin install owner/repo</code>, <code class="k">prism plugin list</code>.</p>`)
+    + group('Make your own', `<p class="note">A plugin is a folder in <code class="k">~/.config/prism/plugins</code> with a <code class="k">plugin.json</code> and a JavaScript file that adds commands, animations or color schemes. It reloads when you save.</p>
+      <div class="btns"><button class="btn ghost" data-link="https://github.com/onufry444/prism/blob/main/docs/plugins.md">How to write a plugin</button><button class="btn ghost" data-pfolder>Open the plugins folder</button></div>`);
+}
 function secAdmin() {
   const a = P.cfg.admin, elevated = P.elevated;
   return (elevated ? '<div class="notice">Prism itself is running as administrator, so every command already has admin rights. Start Prism normally to get the safer per-command flow below.</div>' : '')
@@ -271,6 +323,32 @@ root.addEventListener('click', async e => {
   if ('bgclear' in d) { setLive('terminal.backgroundImage', '', true); renderSection(); return; }
   if (d.open) return api.openFile(d.open);
   if (d.link) return api.openExternal(d.link);
+  if ('store' in d) { st.store = { loading: true }; renderSection(); try { st.store = { list: await api.themes.store() }; } catch (err) { st.store = { error: err.message }; } return renderSection(); }
+  if (d.tinstall) { b.disabled = true; try { await api.themes.install(d.tinstall); st.store = { list: await api.themes.store() }; await P.set({ terminal: { scheme: d.tinstall } }); P.toast('Theme installed'); } catch (err) { P.toast(err.message); } return renderSection(); }
+  if (d.tuse) return P.set({ terminal: { scheme: d.tuse } });
+  if ('tsave' in d) {
+    const name = (prompt('Name of your theme') || '').trim(); if (!name) return;
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'my-theme';
+    await api.themes.save(id, { name, author: '', colors: P.palette() });
+    await P.set({ terminal: { scheme: id } }); return P.toast(`Saved as ${name}`);
+  }
+  if ('tshare' in d) {
+    const pal = P.palette(), colors = Object.fromEntries(Object.entries(pal).filter(([k, v]) => k !== 'name' && /^#[0-9a-f]{6}$/i.test(v || '')));
+    api.clipWrite(JSON.stringify({ name: 'My theme', author: '', colors }, null, 2));
+    P.toast('Theme copied. Paste it into a new file on GitHub.');
+    return api.openExternal('https://github.com/onufry444/prism/blob/main/store/README.md');
+  }
+  if (d.sshgo !== undefined) { const h = P.cfg.ssh.hosts[+d.sshgo]; P.closeSettings(); return P.openSsh(h.name); }
+  if (d.sshed !== undefined) { st.sshEdit = +d.sshed; return renderSection(); }
+  if ('sshcancel' in d) { st.sshEdit = null; return renderSection(); }
+  if (d.sshdel !== undefined) { const hosts = P.cfg.ssh.hosts.filter((_, i) => i !== +d.sshdel); await P.set({ ssh: { hosts } }); return renderSection(); }
+  if ('sshimport' in d) {
+    const found = await api.sshImport(), hosts = [...((P.cfg.ssh && P.cfg.ssh.hosts) || [])];
+    let n = 0; for (const h of found) if (!hosts.some(x => x.name === h.name)) { hosts.push(h); n++; }
+    await P.set({ ssh: { hosts } }); P.toast(found.length ? `Imported ${n} server${n === 1 ? '' : 's'}` : 'No servers in ~/.ssh/config'); return renderSection();
+  }
+  if (d.premove) { if (!confirm(`Remove the plugin ${d.premove}?`)) return; try { await api.plugins.remove(d.premove); } catch (err) { P.toast(err.message); } return; }
+  if ('pfolder' in d) return api.openFile('plugins');
   if (d.update === 'check') { P.update = { ...(P.update || {}), status: 'checking' }; renderSection(); return api.update.check(); }
   if (d.update === 'install') return api.update.install();
   if (d.ae) { st.editing = P.cfg.aliases[+d.ae]?.name; renderSection(); $('#aName')?.focus(); return; }
@@ -292,7 +370,15 @@ root.addEventListener('input', e => {
   const out = root.querySelector(`output[data-out="${d.c}"]`);
   if (out && el.type === 'range') out.textContent = fmt(v, +el.step || 1) + out.dataset.unit;
 });
-root.addEventListener('change', e => { const el = e.target; if (el.tagName === 'SELECT' && el.dataset.c) setLive(el.dataset.c, el.value, true); });
+root.addEventListener('change', e => {
+  const el = e.target;
+  if (el.tagName === 'SELECT' && el.dataset.c) setLive(el.dataset.c, el.value, true);
+  if (el.dataset.ptoggle) {
+    const off = new Set((P.cfg.plugins && P.cfg.plugins.disabled) || []);
+    if (el.checked) off.delete(el.dataset.ptoggle); else off.add(el.dataset.ptoggle);
+    P.set({ plugins: { disabled: [...off] } });
+  }
+});
 root.addEventListener('keydown', e => {
   const el = e.target;
   if (!el.classList || !el.classList.contains('keyin')) return;
@@ -305,6 +391,22 @@ root.addEventListener('keydown', e => {
   el.value = combo; setLive('keys.' + el.dataset.key, combo, true);
 }, true);
 root.addEventListener('submit', async e => {
+  if (e.target.id === 'sshForm') {
+    e.preventDefault();
+    const h = { name: $('#sName').value.trim(), host: $('#sHost').value.trim(), user: $('#sUser').value.trim(), port: +$('#sPort').value || 22, identityFile: $('#sKey').value.trim() };
+    if (!/^[\w.-]{1,40}$/.test(h.name)) { $('#sErr').textContent = 'Name: letters, digits, . _ or -.'; return; }
+    if (!/^[\w.:%-]+$/.test(h.host)) { $('#sErr').textContent = 'That host does not look right.'; return; }
+    if (h.user && !/^[\w.@-]+$/.test(h.user)) { $('#sErr').textContent = 'That user name does not look right.'; return; }
+    const hosts = ((P.cfg.ssh && P.cfg.ssh.hosts) || []).filter((x, i) => i !== st.sshEdit && x.name !== h.name).concat([h]);
+    await P.set({ ssh: { hosts } }); st.sshEdit = null; renderSection(); return P.toast(`${h.name} saved`);
+  }
+  if (e.target.id === 'plForm') {
+    e.preventDefault();
+    const spec = $('#plSpec').value.trim(); if (!spec) return;
+    $('#plErr').textContent = 'Installing…';
+    try { const r = await api.plugins.install(spec); P.toast(`Installed ${r.name}`); $('#plErr').textContent = ''; } catch (err) { $('#plErr').textContent = err.message; }
+    return;
+  }
   if (e.target.id !== 'aliasForm') return;
   e.preventDefault();
   const name = $('#aName').value.trim(), type = root.querySelector('[data-atype].on')?.dataset.atype || 'run', body = $('#aBody').value;

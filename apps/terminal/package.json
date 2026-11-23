@@ -1,7 +1,7 @@
 {
   "name": "prism",
   "productName": "Prism",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A universal terminal for Windows: PowerShell, cmd and bash in one, admin rights per command, configured like Linux",
   "main": "src/main.js",
   "author": "onufry444",
@@ -9,7 +9,7 @@
   "homepage": "https://github.com/onufry444/prism",
   "scripts": {
     "start": "electron .",
-    "test": "node test/translate.test.js && node test/shells.test.js && node test/handoff.test.js",
+    "test": "node test/translate.test.js && node test/shells.test.js && node test/handoff.test.js && node test/plugins.test.js",
     "dist": "electron-builder --win zip --x64 --publish never"
   },
   "dependencies": {

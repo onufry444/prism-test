@@ -1,0 +1,27 @@
+{
+  "name": "Mono Amber",
+  "author": "Prism",
+  "colors": {
+    "background": "#120c02",
+    "foreground": "#ffb000",
+    "cursor": "#ffcc4d",
+    "selection": "#5e491a",
+    "accent": "#ffcc4d",
+    "black": "#2e2002",
+    "red": "#ff8a00",
+    "green": "#ffb000",
+    "yellow": "#ffd166",
+    "blue": "#e09b00",
+    "magenta": "#ffbf40",
+    "cyan": "#ffd98a",
+    "white": "#e39c00",
+    "brightBlack": "#7d5601",
+    "brightRed": "#ffa842",
+    "brightGreen": "#ffc542",
+    "brightYellow": "#ffdf96",
+    "brightBlue": "#ffbd29",
+    "brightMagenta": "#ffd177",
+    "brightCyan": "#ffe6b3",
+    "brightWhite": "#ffce61"
+  }
+}

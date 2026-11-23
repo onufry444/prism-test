@@ -1,0 +1,27 @@
+{
+  "name": "Deep Sea",
+  "author": "Prism",
+  "colors": {
+    "background": "#03111c",
+    "foreground": "#c9e6f0",
+    "cursor": "#00e0c6",
+    "selection": "#025352",
+    "accent": "#00e0c6",
+    "black": "#1b2b35",
+    "red": "#ff6f7d",
+    "green": "#00e0c6",
+    "yellow": "#e8d67a",
+    "blue": "#3aa0ff",
+    "magenta": "#9a7dff",
+    "cyan": "#3fe8ff",
+    "white": "#b1ccd7",
+    "brightBlack": "#5c717b",
+    "brightRed": "#ff9da7",
+    "brightGreen": "#29ffe6",
+    "brightYellow": "#efe3a3",
+    "brightBlue": "#72bbff",
+    "brightMagenta": "#bca9ff",
+    "brightCyan": "#76efff",
+    "brightWhite": "#e9f5f9"
+  }
+}

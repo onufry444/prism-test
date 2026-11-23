@@ -1,0 +1,27 @@
+{
+  "name": "Paper Light",
+  "author": "Prism",
+  "colors": {
+    "background": "#f6f2e9",
+    "foreground": "#2d2a26",
+    "cursor": "#3b6ea8",
+    "selection": "#bac8d4",
+    "accent": "#3b6ea8",
+    "black": "#4b4843",
+    "red": "#b23a3a",
+    "green": "#3d7a3a",
+    "yellow": "#946c12",
+    "blue": "#3b6ea8",
+    "magenta": "#8a4b9e",
+    "cyan": "#2f7f82",
+    "white": "#2d2a26",
+    "brightBlack": "#9c9891",
+    "brightRed": "#cd6565",
+    "brightGreen": "#5aae55",
+    "brightYellow": "#dda21b",
+    "brightBlue": "#6292c8",
+    "brightMagenta": "#ab73bc",
+    "brightCyan": "#45b8bc",
+    "brightWhite": "#111111"
+  }
+}

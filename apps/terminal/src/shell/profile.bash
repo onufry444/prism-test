@@ -21,6 +21,7 @@ prism() {
       __prism_msg "add;$(printf 'run\t%s\t%s' "$n" "$*" | base64 | tr -d '\n')"
       echo "alias $n='$*' (saved, available from the next command)" ;;
     unalias) for n in "$@"; do __prism_msg "remove;$n"; done ;;
+    plugin|ssh|theme) __prism_toy "$sub" "$@" ;;
     help)
       echo "Prism commands: settings, prism alias NAME CMD, prism unalias NAME, prism opacity 0-100,"
       echo "  prism font-size 10-28, prism scheme NAME, prism update, prism uninstall; sudo COMMAND runs it as administrator" ;;
@@ -45,7 +46,7 @@ if [ -n "$PRISM_TAB" ] && { [ "$OSTYPE" = msys ] || [ "$OSTYPE" = cygwin ]; } &&
     command -v cygpath >/dev/null 2>&1 && s=$(cygpath -w "$s")
     powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$s" -Toy "$@"
   }
-  for __t in fetch lava matrix pipes donut clock visualizer cava toys; do
+  for __t in $PRISM_COMMANDS; do
     type -P "$__t" >/dev/null 2>&1 || eval "$__t() { __prism_toy $__t \"\$@\"; }"
   done
   unset __t

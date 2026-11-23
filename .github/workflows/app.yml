@@ -71,6 +71,10 @@ jobs:
           PRISM_TEST_REPO: ${{ github.repository }}
         run: |
           $env:PRISM_TEST_HANDOFF_LOG = Join-Path $env:RUNNER_TEMP 'handoff.log'
+          # the example plugin, so the self-test can run its command and animation
+          $plugins = Join-Path $env:USERPROFILE '.config\prism\plugins'
+          New-Item -ItemType Directory $plugins -Force | Out-Null
+          Copy-Item ..\..\examples\plugins\hello (Join-Path $plugins 'hello') -Recurse -Force
           $exe = Get-ChildItem dist -Recurse -Filter Prism.exe | Select-Object -First 1
           $out = Join-Path $env:RUNNER_TEMP 'smoke.json'
           $p = Start-Process -FilePath $exe.FullName -ArgumentList '--smoke', "`"$out`"" -PassThru -Wait

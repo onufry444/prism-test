@@ -168,3 +168,14 @@ small.path { display: block; color: var(--soft); font-size: 11.5px; font-family:
 .pbar i { display: block; height: 100%; background: var(--ac); transition: width .2s; }
 .notes { margin: 4px 0 10px; } .notes summary { cursor: pointer; opacity: .8; font-size: 13px; }
 .notes pre { white-space: pre-wrap; font: 12px/1.5 var(--mono); opacity: .85; max-height: 220px; overflow: auto; margin: 8px 0 0; }
+
+/* theme store */
+.tgrid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.tcard2 { border-radius: 10px; padding: 12px; display: grid; gap: 4px; border: 1px solid rgba(255,255,255,.08); }
+.tcard2 small { opacity: .65; min-height: 1em; }
+.tcard2 .sw { display: flex; gap: 3px; margin: 4px 0 6px; } .tcard2 .sw i { width: 16px; height: 10px; border-radius: 3px; }
+.btn.sm { min-height: 28px; padding: 0 10px; font-size: 12px; justify-self: start; }
+form.inline { display: flex; gap: 8px; } form.inline input { flex: 1; }
+.sw-t.mini { transform: scale(.8); }
+.cmds .ver { font-style: normal; font-size: 11px; opacity: .6; margin-left: 6px; }
+.perr { color: #f38ba8; }

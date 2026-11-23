@@ -1,0 +1,27 @@
+{
+  "name": "Aurora",
+  "author": "Prism",
+  "colors": {
+    "background": "#0b1020",
+    "foreground": "#d8e1f0",
+    "cursor": "#5cf2b0",
+    "selection": "#25584e",
+    "accent": "#5cf2b0",
+    "black": "#242939",
+    "red": "#ff6b8b",
+    "green": "#5cf2b0",
+    "yellow": "#f6d365",
+    "blue": "#6ea8ff",
+    "magenta": "#b48cff",
+    "cyan": "#5ce1e6",
+    "white": "#bfc8d7",
+    "brightBlack": "#676e7e",
+    "brightRed": "#ff9ab0",
+    "brightGreen": "#8cf6c7",
+    "brightYellow": "#f9e094",
+    "brightBlue": "#9cc4ff",
+    "brightMagenta": "#cfb5ff",
+    "brightCyan": "#8beaed",
+    "brightWhite": "#f2f5fa"
+  }
+}

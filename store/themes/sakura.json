@@ -1,0 +1,27 @@
+{
+  "name": "Sakura",
+  "author": "Prism",
+  "colors": {
+    "background": "#1c1418",
+    "foreground": "#f3dfe6",
+    "cursor": "#ff8fb8",
+    "selection": "#653b4b",
+    "accent": "#ff8fb8",
+    "black": "#362c31",
+    "red": "#ff6f91",
+    "green": "#a8d8a0",
+    "yellow": "#f7d08a",
+    "blue": "#8fb3ff",
+    "magenta": "#ff8fb8",
+    "cyan": "#8fd8d2",
+    "white": "#d9c7cd",
+    "brightBlack": "#7d6f75",
+    "brightRed": "#ff9db4",
+    "brightGreen": "#c5e5c0",
+    "brightYellow": "#fae0b2",
+    "brightBlue": "#b8cfff",
+    "brightMagenta": "#ffb8d2",
+    "brightCyan": "#b2e4e0",
+    "brightWhite": "#fcf7f9"
+  }
+}

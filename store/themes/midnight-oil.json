@@ -1,0 +1,27 @@
+{
+  "name": "Midnight Oil",
+  "author": "Prism",
+  "colors": {
+    "background": "#14110b",
+    "foreground": "#f0dfb8",
+    "cursor": "#ffb347",
+    "selection": "#5f451e",
+    "accent": "#ffb347",
+    "black": "#2e2a20",
+    "red": "#ff6e5a",
+    "green": "#b8d46a",
+    "yellow": "#ffb347",
+    "blue": "#7fa6d9",
+    "magenta": "#d79ad6",
+    "cyan": "#7fcfc0",
+    "white": "#d6c6a3",
+    "brightBlack": "#776e59",
+    "brightRed": "#ff9a8c",
+    "brightGreen": "#cce095",
+    "brightYellow": "#ffc97d",
+    "brightBlue": "#a6c1e5",
+    "brightMagenta": "#e4bbe3",
+    "brightCyan": "#a5ddd3",
+    "brightWhite": "#f8f0de"
+  }
+}

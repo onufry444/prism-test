@@ -1,0 +1,27 @@
+{
+  "name": "Desert",
+  "author": "Prism",
+  "colors": {
+    "background": "#1f1812",
+    "foreground": "#efe2cf",
+    "cursor": "#e08a4d",
+    "selection": "#5d3c25",
+    "accent": "#e08a4d",
+    "black": "#383029",
+    "red": "#d95f43",
+    "green": "#a3b86c",
+    "yellow": "#e9b44c",
+    "blue": "#5fa8b9",
+    "magenta": "#c47fa6",
+    "cyan": "#6ec3b5",
+    "white": "#d6cab8",
+    "brightBlack": "#7d7367",
+    "brightRed": "#e38a76",
+    "brightGreen": "#bccb94",
+    "brightYellow": "#efc97e",
+    "brightBlue": "#8abfcc",
+    "brightMagenta": "#d5a4c0",
+    "brightCyan": "#97d4ca",
+    "brightWhite": "#f9f4ed"
+  }
+}

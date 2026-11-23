@@ -228,6 +228,161 @@ ANIMS.visualizer = {
   }
 };
 
+ANIMS.bonsai = {
+  fps: 30,
+  init(scr, args) { this.seed(scr); this.wait = args.includes('--live') ? 1 : 0; },
+  seed(scr) {
+    scr.clear(); this.w = scr.cols; this.h = scr.rows; this.done = false; this.idle = 0;
+    const base = scr.rows - 4, cx = (scr.cols / 2) | 0;
+    // the pot
+    const pot = hex('#a0603a'), rim = hex('#c7794b');
+    scr.text(cx - 10, base + 1, '\\' + '_'.repeat(19) + '/', rim);
+    scr.text(cx - 9, base + 2, '\\' + '_'.repeat(17) + '/', pot);
+    scr.text(cx - 11, base, ':' + '_'.repeat(21) + ':', rim);
+    this.tips = [{ x: cx, y: base - 1, dx: 0, life: Math.min(scr.rows - 8, 26), kind: 'trunk', age: 0 }];
+    this.base = base;
+  },
+  frame(scr) {
+    if (this.w !== scr.cols || this.h !== scr.rows) this.seed(scr);
+    if (this.done) { if (this.wait && ++this.idle > 90) this.seed(scr); return; }
+    const wood = [hex('#6b4226'), hex('#8b5a2b'), hex('#a0703c')], leaf = [hex('#2f8f46'), hex('#4caf50'), hex('#8bd17c'), hex('#c5e86c')];
+    const next = [];
+    for (const t of this.tips) {
+      if (t.life <= 0) {
+        if (t.kind !== 'leaf') for (let k = 0; k < 7; k++) next.push({ x: t.x + ((Math.random() * 7) | 0) - 3, y: t.y + ((Math.random() * 3) | 0) - 1, dx: 0, life: 2 + (Math.random() * 3) | 0, kind: 'leaf' });
+        continue;
+      }
+      t.life--; t.age++;
+      let dx = 0, dy = -1;
+      if (t.kind === 'trunk') { dx = Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) : 0; if (t.age > 4 && Math.random() < 0.25) next.push({ x: t.x, y: t.y, dx: Math.random() < 0.5 ? -1 : 1, life: 6 + (Math.random() * 10) | 0, kind: 'branch' }); }
+      else if (t.kind === 'branch') { dx = t.dx * (Math.random() < 0.75 ? 1 : 0); dy = Math.random() < 0.35 ? -1 : 0; if (Math.random() < 0.12) next.push({ x: t.x, y: t.y, dx: -t.dx, life: 4 + (Math.random() * 5) | 0, kind: 'branch' }); }
+      else { dx = ((Math.random() * 3) | 0) - 1; dy = ((Math.random() * 3) | 0) - 1; }
+      t.x += dx; t.y += dy;
+      if (t.y < 1) t.y = 1;
+      if (t.kind === 'leaf') scr.set(t.x, t.y, '&', leaf[(Math.random() * leaf.length) | 0]);
+      else scr.set(t.x, t.y, dx < 0 ? (dy ? '\\' : '~') : dx > 0 ? (dy ? '/' : '~') : '|', wood[(Math.random() * wood.length) | 0]);
+      next.push(t);
+    }
+    this.tips = next;
+    if (!this.tips.length) { this.done = true; scr.text(2, scr.rows - 1, ' q quit · bonsai --live grows a new one ', hex('#7f849c')); }
+  }
+};
+
+ANIMS.stars = {
+  fps: 30,
+  init(scr) { this.s = Array.from({ length: 260 }, () => this.star(true)); },
+  star(any) { return { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: any ? Math.random() : 1 }; },
+  frame(scr) {
+    scr.clear();
+    const cx = scr.cols / 2, cy = scr.rows / 2;
+    for (const st of this.s) {
+      st.z -= 0.012;
+      if (st.z <= 0.02) Object.assign(st, this.star(false));
+      const x = (cx + st.x / st.z * cx) | 0, y = (cy + st.y / st.z * cy * 0.9) | 0;
+      if (x < 0 || x >= scr.cols || y < 0 || y >= scr.rows) { Object.assign(st, this.star(false)); continue; }
+      const b = 1 - st.z;
+      scr.set(x, y, b > 0.8 ? '✦' : b > 0.55 ? '*' : b > 0.3 ? '·' : '.', mix(hex('#3a4a7a'), hex('#ffffff'), b));
+    }
+  }
+};
+
+ANIMS.aquarium = {
+  fps: 15,
+  art: { r: ['><>', '><(((º>', '>=))°>', '><((>'], l: ['<><', '<º)))><', '<°((=<', '<))><'] },
+  colors: ['#ff9f43', '#feca57', '#ff6b6b', '#48dbfb', '#ff9ff3', '#1dd1a1'].map(hex),
+  init(scr) { this.setup(scr); },
+  setup(scr) {
+    this.w = scr.cols; this.h = scr.rows;
+    this.fish = Array.from({ length: Math.max(4, (scr.cols * scr.rows / 260) | 0) }, () => this.newFish(scr, true));
+    this.bubbles = []; this.weed = Array.from({ length: Math.max(3, (scr.cols / 14) | 0) }, () => ({ x: (Math.random() * scr.cols) | 0, h: 3 + (Math.random() * Math.min(10, scr.rows / 3)) | 0 }));
+  },
+  newFish(scr, anywhere) {
+    const dir = Math.random() < 0.5 ? 'r' : 'l', k = (Math.random() * this.art.r.length) | 0, art = this.art[dir][k];
+    return { dir, art, x: anywhere ? Math.random() * scr.cols : dir === 'r' ? -art.length : scr.cols, y: 2 + Math.random() * (scr.rows - 6), v: 0.15 + Math.random() * 0.45, c: this.colors[(Math.random() * this.colors.length) | 0] };
+  },
+  frame(scr, t) {
+    if (this.w !== scr.cols || this.h !== scr.rows) this.setup(scr);
+    for (let y = 0; y < scr.rows; y++) { const bg = mix(hex('#0b3d63'), hex('#021526'), y / scr.rows); for (let x = 0; x < scr.cols; x++) scr.set(x, y, ' ', -1, bg); }
+    for (let x = 0; x < scr.cols; x++) scr.set(x, 0, Math.sin(x * 0.4 + t * 2) > 0.3 ? '~' : '-', hex('#7fd6ff'));
+    for (let x = 0; x < scr.cols; x++) scr.set(x, scr.rows - 1, '▒', hex('#c2a36b'));
+    for (const w of this.weed) for (let k = 0; k < w.h; k++) scr.set(w.x + (Math.sin(t * 1.5 + k * 0.6) > 0 ? 1 : 0), scr.rows - 2 - k, k % 2 ? ')' : '(', hex('#2ecc71'));
+    for (const f of this.fish) {
+      f.x += f.dir === 'r' ? f.v : -f.v;
+      if (f.x > scr.cols + 2 || f.x < -f.art.length - 2) Object.assign(f, this.newFish(scr, false));
+      scr.text(f.x | 0, f.y | 0, f.art, f.c);
+      if (Math.random() < 0.02) this.bubbles.push({ x: (f.dir === 'r' ? f.x + f.art.length : f.x - 1) | 0, y: f.y | 0 });
+    }
+    this.bubbles = this.bubbles.filter(b => { b.y -= 0.4; if (b.y < 1) return false; scr.set(b.x, b.y | 0, b.y < 4 ? 'O' : b.y < scr.rows / 2 ? 'o' : '.', hex('#d6f4ff')); return true; });
+  }
+};
+
+ANIMS.snake = {
+  fps: 12,
+  init(scr) { this.reset(scr); },
+  reset(scr) {
+    this.w = scr.cols; this.h = scr.rows;
+    const y = (scr.rows / 2) | 0, x = (scr.cols / 4) | 0;
+    this.body = [[x, y], [x - 1, y], [x - 2, y]]; this.dir = [1, 0]; this.next = [1, 0]; this.over = false; this.score = 0; this.tick = 0;
+    this.food = this.place();
+  },
+  place() { for (;;) { const p = [1 + ((Math.random() * (this.w - 2)) | 0), 2 + ((Math.random() * (this.h - 3)) | 0)]; if (!this.body.some(b => b[0] === p[0] && b[1] === p[1])) return p; } },
+  key(k) {
+    const m = { '\x1b[A': [0, -1], '\x1b[B': [0, 1], '\x1b[C': [1, 0], '\x1b[D': [-1, 0], w: [0, -1], s: [0, 1], d: [1, 0], a: [-1, 0], W: [0, -1], S: [0, 1], D: [1, 0], A: [-1, 0] }[k];
+    if (m && !(m[0] === -this.dir[0] && m[1] === -this.dir[1])) this.next = m;
+    if ((k === 'r' || k === 'R' || k === ' ') && this.over) this.restart = true;
+  },
+  frame(scr) {
+    if (this.restart || this.w !== scr.cols || this.h !== scr.rows) { this.restart = false; this.reset(scr); }
+    scr.clear();
+    for (let x = 0; x < scr.cols; x++) { scr.set(x, 1, '─', hex('#45475a')); scr.set(x, scr.rows - 1, '─', hex('#45475a')); }
+    for (let y = 1; y < scr.rows; y++) { scr.set(0, y, '│', hex('#45475a')); scr.set(scr.cols - 1, y, '│', hex('#45475a')); }
+    scr.text(1, 0, ` snake · score ${this.score} · arrows or WASD · q quit `, hex('#cdd6f4'));
+    // slower on a small screen at first, faster as it grows
+    if (!this.over && (++this.tick % Math.max(1, 3 - Math.floor(this.score / 5)) === 0 || this.score >= 10)) {
+      this.dir = this.next;
+      const h = [this.body[0][0] + this.dir[0], this.body[0][1] + this.dir[1]];
+      if (h[0] <= 0 || h[0] >= scr.cols - 1 || h[1] <= 1 || h[1] >= scr.rows - 1 || this.body.some(b => b[0] === h[0] && b[1] === h[1])) this.over = true;
+      else { this.body.unshift(h); if (h[0] === this.food[0] && h[1] === this.food[1]) { this.score++; this.food = this.place(); } else this.body.pop(); }
+    }
+    scr.set(this.food[0], this.food[1], '●', hex('#f38ba8'));
+    this.body.forEach((b, i) => scr.set(b[0], b[1], i ? '█' : '▓', ramp([hex('#a6e3a1'), hex('#40a02b')], i / Math.max(1, this.body.length))));
+    if (this.over) { const m = ` game over · score ${this.score} · r plays again · q quits `; scr.text(((scr.cols - m.length) / 2) | 0, (scr.rows / 2) | 0, m, hex('#11111b'), hex('#f9e2af')); }
+  }
+};
+
+// ------------------------------------------------------------------ text toys
+// cowsay with Prism's own cow
+function cowsay(args) {
+  const text = (args.join(' ').trim() || 'Moo! Prism says hi.').replace(/\s+/g, ' ');
+  const width = Math.max(Math.min(40, text.length), ...text.split(' ').map(w => Math.min(60, w.length)));
+  const lines = []; let cur = '';
+  for (const w of text.split(' ')) { if ((cur + ' ' + w).trim().length > width) { lines.push(cur.trim()); cur = w; } else cur += ' ' + w; }
+  if (cur.trim()) lines.push(cur.trim());
+  const W = Math.max(...lines.map(l => l.length));
+  const box = [' ' + '_'.repeat(W + 2)];
+  lines.forEach((l, i) => { const [a, b] = lines.length === 1 ? ['<', '>'] : i === 0 ? ['/', '\\'] : i === lines.length - 1 ? ['\\', '/'] : ['|', '|']; box.push(`${a} ${l.padEnd(W)} ${b}`); });
+  box.push(' ' + '-'.repeat(W + 2));
+  const cow = [
+    '     \\     ___     ___',
+    '      \\   (   \\___/   )',
+    '            \\  ◉   ◉  /',
+    '             |  ___  |',
+    '             | (o o) |',
+    '              \\_____/'
+  ];
+  return [...box, ...cow].map(l => ' ' + l).join('\r\n') + '\r\n';
+}
+async function weather(args, ctx) {
+  const place = args.filter(a => !a.startsWith('-')).join(' ').trim();
+  if (!ctx.fetch) return 'Weather needs an internet connection.\r\n';
+  try {
+    const r = await ctx.fetch(`https://wttr.in/${encodeURIComponent(place)}?F&lang=en`, { headers: { 'User-Agent': 'curl/8.0 (Prism)' } });
+    if (!r.ok) return `The weather service answered ${r.status}. Try again later, or name a city: weather Warsaw\r\n`;
+    const text = (await r.text()).replace(/\r?\n/g, '\r\n');
+    return text + '\x1b[0m\x1b[90m  from wttr.in · weather CITY for another place\x1b[0m\r\n';
+  } catch (e) { return `Could not reach the weather service (${e.message}).\r\n`; }
+}
+
 // ------------------------------------------------------------------ fetch
 function reg(key, name) {
   if (process.platform !== 'win32') return '';
@@ -315,7 +470,7 @@ function fetchText(ctx, cols) {
 }
 
 // ------------------------------------------------------------------ sessions
-const NAMES = { lava: 'lava', lavalamp: 'lava', matrix: 'matrix', cmatrix: 'matrix', pipes: 'pipes', donut: 'donut', clock: 'clock', 'tty-clock': 'clock', visualizer: 'visualizer', cava: 'visualizer', fetch: 'fetch', fastfetch: 'fetch', neofetch: 'fetch' };
+const NAMES = { bonsai: 'bonsai', cbonsai: 'bonsai', stars: 'stars', starfield: 'stars', aquarium: 'aquarium', asciiquarium: 'aquarium', snake: 'snake', weather: 'weather', wttr: 'weather', cowsay: 'cowsay', lava: 'lava', lavalamp: 'lava', matrix: 'matrix', cmatrix: 'matrix', pipes: 'pipes', donut: 'donut', clock: 'clock', 'tty-clock': 'clock', visualizer: 'visualizer', cava: 'visualizer', fetch: 'fetch', fastfetch: 'fetch', neofetch: 'fetch' };
 const LIST = [
   ['fetch', 'system info with the Prism logo, like fastfetch'],
   ['lava', 'a lava lamp (t: next colors: lava, ocean, forest, sunset, mono)'],
@@ -323,7 +478,13 @@ const LIST = [
   ['pipes', 'pipes growing across the screen'],
   ['donut', 'the spinning ASCII donut'],
   ['clock', 'a big clock'],
-  ['visualizer', 'bars that move with whatever your PC is playing (also: cava)']
+  ['visualizer', 'bars that move with whatever your PC is playing (also: cava)'],
+  ['bonsai', 'grows a little tree (bonsai --live keeps growing new ones)'],
+  ['stars', 'flying through the stars'],
+  ['aquarium', 'fish, bubbles and seaweed'],
+  ['snake', 'the game: arrows or WASD, r plays again'],
+  ['weather', 'the forecast, here or for a city: weather Warsaw'],
+  ['cowsay', 'a cow says your text: cowsay hello']
 ];
 
 class Toys {
@@ -335,16 +496,29 @@ class Toys {
   }
   start(req) {
     if (!/^[0-9a-f]{32}$/.test(req.id || '')) return;
-    const name = NAMES[String(req.name || '').toLowerCase()], tab = this.host.tab(req.tab), args = (Array.isArray(req.args) ? req.args : []).map(String);
-    if (!name) return this.result(req.id, { code: 0, text: 'Prism toys:\r\n' + LIST.map(([n, d]) => `  \x1b[1m${n.padEnd(11)}\x1b[0m ${d}`).join('\r\n') + '\r\n' });
+    const raw = String(req.name || '').toLowerCase(), tab = this.host.tab(req.tab), args = (Array.isArray(req.args) ? req.args : []).map(String);
+    const plugins = this.host.plugins, cwd = String(req.cwd || '');
+    // commands that answer with text: imgcat, plugin, ssh, and commands added by plugins
+    const say = p => Promise.resolve(p).then(text => this.result(req.id, { code: 0, text: String(text || '').replace(/\r?\n/g, '\r\n') }), e => this.result(req.id, { code: 1, text: `${raw}: ${e.message}\r\n` }));
+    if (this.host.extra && this.host.extra[raw]) return say(this.host.extra[raw](req.tab, args, cwd));
+    if (plugins && plugins.commands.has(raw)) {
+      let out = '';
+      const ctx = { args, cwd, version: this.host.version, print: t => { out += String(t) + '\n'; }, fetch: this.host.fetch };
+      return say(Promise.resolve().then(() => plugins.commands.get(raw).fn(ctx, args)).then(r => out + (typeof r === 'string' ? r : '')));
+    }
+    const pluginAnim = plugins && plugins.animations.get(raw);
+    const name = NAMES[raw] || (pluginAnim ? raw : null);
+    if (!name) return this.result(req.id, { code: 0, text: 'Prism toys:\r\n' + LIST.map(([n, d]) => `  \x1b[1m${n.padEnd(11)}\x1b[0m ${d}`).join('\r\n') + (plugins && plugins.animations.size ? '\r\nFrom plugins: ' + [...plugins.animations.keys()].join(', ') : '') + '\r\n' });
     if (!tab) return this.result(req.id, { code: 1, text: 'Prism could not find the tab that asked.\r\n' });
     const ctx = { version: this.host.version, shell: tab.profile && (tab.profile.prism ? `Prism shell (${tab.profile.name})` : tab.profile.name), display: this.host.display && this.host.display(), audio: this.host.audio };
     if (name === 'fetch') return this.result(req.id, { code: 0, text: fetchText(ctx, tab.cols) });
+    if (name === 'cowsay') return this.result(req.id, { code: 0, text: cowsay(args) });
+    if (name === 'weather') { weather(args, { fetch: this.host.fetch }).then(text => this.result(req.id, { code: 0, text })); return; }
     if (this.sessions.has(req.tab)) return this.result(req.id, { code: 1, text: 'Something is already running in this tab.\r\n' });
-    const anim = Object.assign(Object.create(ANIMS[name]), {});
+    const anim = Object.create(pluginAnim ? pluginAnim.anim : ANIMS[name]);
     const scr = new Screen(tab.cols, tab.rows);
     const s = { anim, scr, tab, id: req.id, t0: Date.now(), last: Date.now() };
-    try { anim.init(scr, args, ctx); } catch (e) { return this.result(req.id, { code: 1, text: `${name}: ${e.message}\r\n` }); }
+    try { anim.init && anim.init(scr, args, { ...ctx, colors: { rgb, hex, mix, ramp } }); } catch (e) { return this.result(req.id, { code: 1, text: `${name}: ${e.message}\r\n` }); }
     tab.send(`${ESC}[?1049h${ESC}[?25l${ESC}[2J`);
     const tick = () => {
       const now = Date.now();
@@ -375,4 +549,4 @@ class Toys {
   }
 }
 
-module.exports = { Toys, NAMES, LIST, fetchText, Screen, ANIMS };
+module.exports = { Toys, NAMES, LIST, fetchText, cowsay, weather, Screen, ANIMS };

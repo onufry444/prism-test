@@ -27,7 +27,8 @@ function global:__prism_call([string]$Type, [System.Collections.IDictionary]$Fie
 }
 function global:__prism_toy([string]$Name, [string[]]$Rest) {
   if (-not (& $global:__PrismInPrism)) { Write-Host "$Name runs inside Prism. Open Prism and try it there."; $global:LASTEXITCODE = 1; return }
-  $r = __prism_call 'toy' ([ordered]@{ name = $Name; args = @($Rest) })
+  $here = (Get-Location).ProviderPath
+  $r = __prism_call 'toy' ([ordered]@{ name = $Name; args = @($Rest); cwd = $here })
   if ($r -and $r.text) { [Console]::Write($r.text) }
   $global:LASTEXITCODE = if ($r) { [int]$r.code } else { 1 }
 }
