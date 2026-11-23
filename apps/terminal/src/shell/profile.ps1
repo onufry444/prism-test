@@ -1,4 +1,4 @@
-# Prism shell profile for Windows PowerShell 5.1 and PowerShell 7.
+﻿# Prism shell profile for Windows PowerShell 5.1 and PowerShell 7.
 # Loaded by init.ps1 after your own $PROFILE. Settings come from $global:PrismConfig (config.ps1).
 #
 # - Linux commands with GNU flags: ls -la, rm -rf, cp -r, mkdir -p, grep -rn, touch, which, head, tail, wc,
@@ -751,6 +751,9 @@ function global:__prism_tick {
   $here = (Get-Location).Path
   if ($global:__PrismPwd -and $global:__PrismPwd -ne $here) { $global:PRISM_OLDPWD = $global:__PrismPwd }
   $global:__PrismPwd = $here
+  # tell Prism the folder (new panes and restored tabs start there); only when it changed
+  $fs = (Get-Location).ProviderPath
+  if ($env:PRISM_TAB -and (Get-Location).Provider.Name -eq 'FileSystem' -and $fs -ne $global:__PrismToldCwd) { $global:__PrismToldCwd = $fs; __prism_msg "cwd;$($env:PRISM_TAB);$fs" }
   if (Get-Command __tc_reload -ErrorAction SilentlyContinue) { __tc_reload }
 }
 # errors from loading the profile are not a reason to offer admin rights

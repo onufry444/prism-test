@@ -67,7 +67,10 @@ const DEFAULTS = {
     newTab: 'Ctrl+Shift+T', closeTab: 'Ctrl+Shift+W', nextTab: 'Ctrl+Tab', prevTab: 'Ctrl+Shift+Tab',
     settings: 'Ctrl+,', search: 'Ctrl+Shift+F', copy: 'Ctrl+Shift+C', paste: 'Ctrl+Shift+V',
     zoomIn: 'Ctrl+=', zoomOut: 'Ctrl+-', zoomReset: 'Ctrl+0', newWindow: 'Ctrl+Shift+N',
-    toggleWindow: 'Ctrl+Alt+T'
+    toggleWindow: 'Ctrl+Alt+T',
+    splitRight: 'Alt+Shift+=', splitDown: 'Alt+Shift+-',
+    focusLeft: 'Alt+Left', focusRight: 'Alt+Right', focusUp: 'Alt+Up', focusDown: 'Alt+Down',
+    resizeLeft: 'Alt+Shift+Left', resizeRight: 'Alt+Shift+Right', resizeUp: 'Alt+Shift+Up', resizeDown: 'Alt+Shift+Down'
   },
   windows: {
     // console apps started anywhere in Windows open in a Prism tab (needs Windows Terminal's console host)
@@ -82,7 +85,7 @@ const DEFAULTS = {
     mode: 'inline'
   },
   // checkUpdates: look for a new version at start and twice a day (Settings > About shows it)
-  startup: { launchAtLogin: false, restoreTabs: false, checkUpdates: true }
+  startup: { launchAtLogin: false, restoreTabs: true, checkUpdates: true }
 };
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'prism');

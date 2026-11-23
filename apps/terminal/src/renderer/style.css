@@ -43,8 +43,23 @@ body.maxed #app { border-radius: 0; border: 0; }
 
 #terms { position: relative; flex: 1; }
 #terms::before { content: ''; position: absolute; inset: 0; background: var(--bgimg) center / cover no-repeat; opacity: var(--bgimg-op); pointer-events: none; }
-.term { position: absolute; inset: 0; padding: 4px var(--pad) var(--pad); visibility: hidden; }
-.term.on { visibility: visible; }
+/* tabs hold panes; panes are laid out in rows and columns with draggable dividers */
+.tabview { position: absolute; inset: 0; display: flex; visibility: hidden; }
+.tabview.on { visibility: visible; }
+.tabview > * { flex: 1 1 0; }
+.split { display: flex; min-width: 0; min-height: 0; }
+.split.row { flex-direction: row; } .split.col { flex-direction: column; }
+.term { position: relative; min-width: 0; min-height: 0; padding: 4px var(--pad) var(--pad); }
+.tabview.multi .term { padding: 4px calc(var(--pad) * .6) calc(var(--pad) * .6); }
+.tabview.multi .term:not(.focused) { opacity: .72; transition: opacity .15s; }
+.divider { flex: 0 0 5px; position: relative; z-index: 2; }
+.split.row > .divider { cursor: col-resize; } .split.col > .divider { cursor: row-resize; }
+.divider::after { content: ''; position: absolute; inset: 0; margin: auto; background: var(--line); }
+.split.row > .divider::after { width: 1px; } .split.col > .divider::after { height: 1px; }
+.divider:hover::after { background: var(--ac); }
+.split.row > .divider:hover::after { width: 3px; } .split.col > .divider:hover::after { height: 3px; }
+.tab .np { font-size: 10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--fg) 14%, transparent); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 .term .xterm, .term .xterm-viewport, .term .xterm-screen { background: transparent !important; }
 .xterm-viewport::-webkit-scrollbar { width: 10px; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }

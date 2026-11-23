@@ -166,6 +166,7 @@ function onShellMessage(msg) {
   if (SMOKE_OUT) smokeMsgs.push(msg);
   const i = msg.indexOf(';'), cmd = i < 0 ? msg : msg.slice(0, i), arg = i < 0 ? '' : msg.slice(i + 1).trim();
   const cfg = config.get();
+  if (cmd === 'cwd') { const j = arg.indexOf(';'); const t = ptys.get(arg.slice(0, j)); if (t) t.cwd = arg.slice(j + 1); return; }
   if (cmd === 'elevate' || cmd === 'toy') {
     let req; try { req = JSON.parse(Buffer.from(arg, 'base64').toString('utf8')); } catch { return; }
     if (cmd === 'elevate') elevator.start(req); else toys.start(req);
@@ -252,13 +253,52 @@ function undoOldDesktop() {
   try { fs.unlinkSync(file); } catch {}
 }
 
+// ---------- session: windows, tabs, panes and their recent output come back after a restart ----------
+const SESSION_FILE = path.join(DATA, 'session.json');
+const sessions = new Map(); // webContents id -> { snapshot, bounds, maximized }
+const restoredCwd = new Map(); // pane id from the last session -> its folder
+let sessionDirty = false;
+function withCwds(node) {
+  if (!node) return node;
+  if (node.pane) return { ...node, cwd: ptys.get(node.pane)?.cwd || restoredCwd.get(node.pane) || null };
+  return { ...node, a: withCwds(node.a), b: withCwds(node.b) };
+}
+ipcMain.on('session:save', (e, snap) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (w && snap && Array.isArray(snap.tabs)) {
+    sessions.set(e.sender.id, { snapshot: { ...snap, tabs: snap.tabs.map(t => ({ ...t, root: withCwds(t.root) })) }, bounds: w.getNormalBounds(), maximized: w.isMaximized() });
+    sessionDirty = true;
+  }
+  e.returnValue = true;
+});
+function writeSession(force) {
+  if (SMOKE_OUT || (!sessionDirty && !force)) return;
+  sessionDirty = false;
+  const windows = [...sessions.values()].filter(s => s.snapshot.tabs.length);
+  try { fs.writeFileSync(SESSION_FILE, JSON.stringify({ version: 1, windows })); } catch (e) { console.error('Prism: saving the session failed', e.message); }
+}
+function loadSession() {
+  if (!config.get().startup.restoreTabs) return [];
+  try {
+    const s = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+    const walk = n => { if (!n) return; if (n.pane) { if (n.cwd) restoredCwd.set(n.pane, n.cwd); } else { walk(n.a); walk(n.b); } };
+    for (const w of s.windows || []) for (const t of w.snapshot.tabs || []) walk(t.root);
+    return (s.windows || []).filter(w => w.snapshot && w.snapshot.tabs && w.snapshot.tabs.length);
+  } catch { return []; }
+}
+setInterval(() => writeSession(), 30000);
+
 // ---------- terminal windows ----------
-function openTerminal({ show = true, settings = false, open = null } = {}) {
+function openTerminal({ show = true, settings = false, open = null, restore = null } = {}) {
   const cfg = config.get();
   const wa = screen.getPrimaryDisplay().workArea;
   const width = Math.max(560, Math.min(1180, wa.width - 80)), height = Math.max(360, Math.min(740, wa.height - 60));
+  // a restored window goes back where it was, if that place is still on a screen
+  const rb = restore && restore.bounds;
+  const onScreen = rb && screen.getAllDisplays().some(d => rb.x < d.workArea.x + d.workArea.width - 40 && rb.x + rb.width > d.workArea.x + 40 && rb.y >= d.workArea.y - 10 && rb.y < d.workArea.y + d.workArea.height - 40);
+  const pos = onScreen ? { x: rb.x, y: rb.y, width: Math.max(560, rb.width), height: Math.max(360, rb.height) } : { width, height, x: wa.x + Math.round((wa.width - width) / 2), y: wa.y + Math.round((wa.height - height) / 2) };
   const w = new BrowserWindow({
-    width, height, x: wa.x + Math.round((wa.width - width) / 2), y: wa.y + Math.round((wa.height - height) / 2),
+    ...pos,
     minWidth: 560, minHeight: 360, show: false, title: 'Prism',
     frame: false, transparent: true, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
@@ -266,6 +306,8 @@ function openTerminal({ show = true, settings = false, open = null } = {}) {
   w.prismTerminal = true;
   w.openSettingsOnLoad = settings;
   w.openOnLoad = open; // the first tab: a program, a folder or a handed-off console instead of a shell
+  w.restoreOnLoad = restore && restore.snapshot;
+  if (restore && restore.maximized) w.once('ready-to-show', () => w.maximize());
   w.on('focus', () => { lastTerminal = w; });
   lastTerminal = w;
   w.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -278,6 +320,11 @@ function openTerminal({ show = true, settings = false, open = null } = {}) {
   w.on('maximize', () => w.webContents.send('win:state', true));
   w.on('unmaximize', () => w.webContents.send('win:state', false));
   const wc = w.webContents;
+  // closing one of several windows forgets it; closing the last one (or quitting) keeps it for next time
+  // (decided on close; the window still saves itself while it unloads, so the entry is dropped after that)
+  const wcId = wc.id;
+  w.on('close', () => { w.forgetSession = !quitting && terminals().length > 1; });
+  w.on('closed', () => { if (w.forgetSession) { sessions.delete(wcId); sessionDirty = true; } });
   w.on('closed', () => { for (const [id, t] of ptys) if (t.wc === wc) { elevator?.kill(id); try { t.p.kill(); } catch {} ptys.delete(id); } });
   return w;
 }
@@ -329,11 +376,13 @@ function prismMenu(win) {
 
 // ---------- IPC ----------
 ipcMain.handle('app:init', e => ({
-  ...payload(), profiles: PROFILES, platform: process.platform, version: app.getVersion(), translateAvailable: IS_WIN, elevated: ELEVATED,
-  startup: { openSettings: BrowserWindow.fromWebContents(e.sender)?.openSettingsOnLoad || false, open: BrowserWindow.fromWebContents(e.sender)?.openOnLoad || null }
+  ...payload(), profiles: PROFILES, platform: process.platform, osRelease: os.release(), version: app.getVersion(), translateAvailable: IS_WIN, elevated: ELEVATED,
+  startup: { openSettings: BrowserWindow.fromWebContents(e.sender)?.openSettingsOnLoad || false, open: BrowserWindow.fromWebContents(e.sender)?.openOnLoad || null, restore: BrowserWindow.fromWebContents(e.sender)?.restoreOnLoad || null }
 }));
 ipcMain.handle('config:set', (e, patch) => setConfig(patch));
-ipcMain.handle('pty:create', (e, id, profileId, cols, rows, cwd, run) => {
+ipcMain.handle('pty:create', (e, id, profileId, cols, rows, cwd, run, cwdFrom) => {
+  // a split starts in the folder of the pane it came from; a restored pane in its saved folder
+  if (!cwd && cwdFrom) cwd = ptys.get(cwdFrom)?.cwd || restoredCwd.get(cwdFrom) || null;
   const wc = e.sender;
   if (run) {
     const profile = { id: 'run', name: run.title || path.basename(String(run.file)), kind: 'run', cmd: run.file };
@@ -567,6 +616,41 @@ async function runSmoke() {
       check('window: resizes from its edges', b1.width === b0.width - 100 && b1.height === b0.height - 80 && b2.x === b1.x + 30 && b2.width === b1.width - 30 && b2.y === b1.y + 20, { b0, b1, b2, b3, calls: lastResize });
     }
 
+    // resizing must not duplicate or garble what is on screen (ConPTY repaints after a resize)
+    {
+      const buf = `(() => { const b = window.Prism.active.term.buffer.active; return Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n'); })()`;
+      await w.webContents.executeJavaScript(`window.Prism.typeInActive('1..40 | ForEach-Object { "ROW_$_" + ("." * 30) }\\r')`);
+      await wait(2500);
+      for (const [edge, dx, dy] of [['se', -260, -160], ['se', 0, 0], ['se', -120, -60], ['se', 0, 0]]) {
+        await w.webContents.executeJavaScript(`window.api.resizeStart().then(() => window.api.resizeTo('${edge}', ${dx}, ${dy}))`);
+        await wait(700);
+      }
+      await wait(1500);
+      const text = await w.webContents.executeJavaScript(buf);
+      const rows = (text.match(/^ROW_\d+\.+$/gm) || []);
+      const counts = {}; rows.forEach(r => { const n = r.match(/\d+/)[0]; counts[n] = (counts[n] || 0) + 1; });
+      const dup = Object.entries(counts).filter(([, c]) => c > 1).map(([n]) => n);
+      check('window: content intact after resizing', Object.keys(counts).length === 40 && !dup.length, { found: Object.keys(counts).length, duplicated: dup, tail: text.slice(-1500) });
+    }
+
+    // split panes: a second shell next to the first, in the same folder
+    {
+      const id = await w.webContents.executeJavaScript(`window.Prism.split('row').then(p => p && p.id)`);
+      await wait(6000);
+      await w.webContents.executeJavaScript(`window.Prism.typeInActive('echo PANE_$((2+3))\\r')`);
+      await wait(2500);
+      const r = await w.webContents.executeJavaScript(`(() => { const P = window.Prism, p = P.paneById(${JSON.stringify(id)}), b = p && p.term.buffer.active; return { panes: P.tab.panes.length, focused: P.active === p, cols: p && p.term.cols, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+      check('panes: split right runs a second shell', r.panes === 2 && r.focused && /\bPANE_5\b/.test(r.text), r);
+      await w.webContents.executeJavaScript(`window.Prism.split('col').then(() => true)`);
+      await wait(1500);
+      const n = await w.webContents.executeJavaScript(`window.Prism.tab.panes.length`);
+      check('panes: split down', n === 3, n);
+      // the session remembers the layout and the folders
+      const snap = await w.webContents.executeJavaScript(`JSON.stringify(window.Prism.snapshot())`).then(JSON.parse);
+      const root = snap.tabs[0] && snap.tabs[0].root;
+      check('session: remembers panes and output', root && root.dir === 'row' && root.b && root.b.dir === 'col' && root.a.lines.some(l => /ROW_40/.test(l)), JSON.stringify(snap).slice(0, 1500));
+    }
+
     // 2. shells: aliases, Prism commands, Linux commands, translation through the pipe
     const testable = PROFILES.filter(p => ['pwsh', 'cmd', 'bash'].includes(p.kind) && p.id !== 'prism');
     for (const prof of testable) {
@@ -612,12 +696,12 @@ async function runSmoke() {
     {
       const id = await w.webContents.executeJavaScript(`window.Prism.newTab(null, null, { run: { file: 'cmd.exe', args: '/d /s /c "echo RUN_OK & exit 4"', title: 'runtest' } }).then(t => t.id)`);
       await wait(4000);
-      const r = await w.webContents.executeJavaScript(`(() => { const t = window.Prism.tabs.find(x => x.id === ${JSON.stringify(id)}); const b = t && t.term.buffer.active; return { title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+      const r = await w.webContents.executeJavaScript(`(() => { const t = window.Prism.paneById(${JSON.stringify(id)}); const b = t && t.term.buffer.active; return { title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
       check('run: program output in its own tab', /RUN_OK/.test(r.text) && !!r.title, r); // the program may set its own title
       check('run: tab stays open with the exit code', /exited with code 4/.test(r.text), r.text.slice(-300));
       await w.webContents.executeJavaScript(`window.Prism.typeInActive('x')`);
       await wait(800);
-      const left = await w.webContents.executeJavaScript(`window.Prism.tabs.some(x => x.id === ${JSON.stringify(id)})`);
+      const left = await w.webContents.executeJavaScript(`!!window.Prism.paneById(${JSON.stringify(id)})`);
       check('run: a key closes the finished tab', !left, left);
     }
 
@@ -642,7 +726,7 @@ async function runSmoke() {
       check('default terminal: Windows hands the console to Prism', !!got, { handoffs: smokeHandoffs, log: (() => { try { return fs.readFileSync(process.env.PRISM_TEST_HANDOFF_LOG || '', 'utf8').slice(-3000); } catch { return null; } })() });
       if (got) {
         await wait(7000);
-        const r = await w.webContents.executeJavaScript(`(() => { const t = window.Prism.tabs.find(x => x.id === ${JSON.stringify(got.id)}); const b = t && t.term.buffer.active; return { tab: !!t, title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
+        const r = await w.webContents.executeJavaScript(`(() => { const t = window.Prism.paneById(${JSON.stringify(got.id)}); const b = t && t.term.buffer.active; return { tab: !!t, title: t && t.title, text: b ? Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString(true) || '').join('\\n') : '' }; })()`);
         check('default terminal: console output in the tab', r.tab && /HANDOFF_OK/.test(r.text), r);
         check('default terminal: exit code shown', /exited with code 3/.test(r.text), r.text.slice(-300));
       }
@@ -710,7 +794,9 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     config.watch();
     onConfigChanged();
     const req = openRequest(argv, process.cwd());
-    if (!argv.includes('--background') || req) openTerminal({ settings: argv.includes('--settings'), open: req });
+    const last = req || argv.includes('--background') ? [] : loadSession();
+    if (last.length) last.forEach((r, i) => openTerminal({ restore: r, settings: i === 0 && argv.includes('--settings') }));
+    else if (!argv.includes('--background') || req) openTerminal({ settings: argv.includes('--settings'), open: req });
     app.on('activate', () => { if (!terminals().length) openTerminal(); });
   });
   app.on('window-all-closed', () => {
@@ -718,5 +804,5 @@ if (!SMOKE_OUT && !app.requestSingleInstanceLock()) {
     if (!IS_MAC || quitting) app.quit();
   });
   app.on('before-quit', () => { quitting = true; });
-  app.on('will-quit', () => { globalShortcut.unregisterAll(); });
+  app.on('will-quit', () => { globalShortcut.unregisterAll(); writeSession(true); });
 }

@@ -7,7 +7,9 @@ contextBridge.exposeInMainWorld('api', {
   init: () => ipcRenderer.invoke('app:init'),
   setConfig: patch => ipcRenderer.invoke('config:set', patch),
   onConfig: on('config:changed'),
-  create: (id, profileId, cols, rows, cwd, run) => ipcRenderer.invoke('pty:create', id, profileId, cols, rows, cwd, run),
+  create: (id, profileId, cols, rows, cwd, run, cwdFrom) => ipcRenderer.invoke('pty:create', id, profileId, cols, rows, cwd, run, cwdFrom),
+  // the window's tabs, panes and recent output, so they come back after a restart (sync while the window closes)
+  saveSession: (s, sync) => (sync ? ipcRenderer.sendSync('session:save', s) : ipcRenderer.send('session:save', s)),
   adopt: (id, cols, rows) => ipcRenderer.invoke('pty:adopt', id, cols, rows),
   onOpenTab: on('tab:open'),
   integration: () => ipcRenderer.invoke('integration:status'),

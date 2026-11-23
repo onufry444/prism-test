@@ -84,6 +84,12 @@ __prism_git_branch() {
 }
 __prism_prompt() {
   local code=$?
+  # tell Prism the folder (new panes and restored tabs start there); only when it changed
+  if [ -n "$PRISM_TAB" ] && [ "$PWD" != "$__PRISM_TOLD_CWD" ]; then
+    __PRISM_TOLD_CWD=$PWD
+    local w=$PWD; command -v cygpath >/dev/null 2>&1 && w=$(cygpath -w "$PWD")
+    __prism_msg "cwd;$PRISM_TAB;$w"
+  fi
   __tc_reload 2>/dev/null
   [ "$PRISM_KEEP_PROMPT" = 1 ] && return
   local r='\[\e[0m\]' sym_color="$PRISM_C_SYM" branch
