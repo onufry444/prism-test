@@ -24,7 +24,7 @@ const { translate, needsAdmin, sudoRest } = require('./translate');
 const { Elevator } = require('./elevate');
 const { startHandoffServer } = require('./handoff');
 const { Toys } = require('./toys');
-const { Updater } = require('./updater');
+const { Updater, repoName } = require('./updater');
 const prismApi = require('./api');
 const { Plugins } = require('./plugins');
 const { Themes } = require('./themes');
@@ -524,7 +524,7 @@ function startPluginsAndThemes() {
     fetch: (url, opts) => require('electron').net.fetch(url, opts),
     onChange: () => { writeShells(); broadcast('config:changed', payload()); }
   }).load();
-  themes = new Themes({ dir: path.join(CONFIG_DIR, 'themes'), fetch: (url, opts) => require('electron').net.fetch(url, opts), repo: () => (updater ? updater.repo() : 'onufry444/prism') });
+  themes = new Themes({ dir: path.join(CONFIG_DIR, 'themes'), fetch: (url, opts) => require('electron').net.fetch(url, opts), repo: () => (updater ? updater.repo() : repoName()) });
   themes.load();
   if (!SMOKE_OUT) { plugins.watch(); themes.watch(() => broadcast('config:changed', payload())); }
 }
@@ -699,6 +699,8 @@ function runPty(profile, lines, firstWait) {
     p.onExit(finish);
     (async () => {
       await wait(firstWait);
+      // a slow machine can take a while to load the profile: wait for the prompt before typing
+      for (let t = 0; t < 40000 && !out.includes('\u276f'); t += 500) await wait(500);
       for (const l of lines) { const [text, ms] = Array.isArray(l) ? l : [l, 2500]; if (!toys.input(id, text) && !elevator.input(id, text + '\r')) p.write(text + '\r'); await wait(ms); }
       setTimeout(finish, 3000);
     })();

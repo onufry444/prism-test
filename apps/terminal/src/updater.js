@@ -24,10 +24,7 @@ class Updater {
   }
   // Only an installed Prism (in %LOCALAPPDATA%\Prism\app) can update itself
   canInstall() { return process.platform === 'win32' && path.dirname(this.host.exe).toLowerCase() === this.appDir.toLowerCase(); }
-  repo() {
-    try { const r = fs.readFileSync(path.join(this.root, 'repo.txt'), 'utf8').trim(); if (/^[\w.-]+\/[\w.-]+$/.test(r)) return r; } catch {}
-    return process.env.PRISM_TEST_REPO || 'onufry444/prism';
-  }
+  repo() { return repoName(this.root); }
   set(s) { this.state = { ...this.state, ...s }; this.host.emit(this.state); return this.state; }
 
   async check() {
@@ -136,4 +133,10 @@ if (Test-Path -LiteralPath $new) { Remove-Item -LiteralPath $new -Recurse -Force
 Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
 `;
 
-module.exports = { Updater, newer, SWAP };
+// The repository Prism was installed from (the installer writes repo.txt); updates and the theme store come from there
+function repoName(root = path.join(process.env.LOCALAPPDATA || os.homedir(), 'Prism')) {
+  try { const r = fs.readFileSync(path.join(root, 'repo.txt'), 'utf8').trim(); if (/^[\w.-]+\/[\w.-]+$/.test(r)) return r; } catch {}
+  return process.env.PRISM_TEST_REPO || 'onufry444/prism';
+}
+
+module.exports = { Updater, newer, SWAP, repoName };
