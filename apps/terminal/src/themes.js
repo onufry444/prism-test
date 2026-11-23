@@ -39,8 +39,17 @@ class Themes {
     let t; try { fs.watch(this.host.dir, () => { clearTimeout(t); t = setTimeout(() => { this.load(); onChange(); }, 300); }); } catch {}
   }
   base() { return `https://raw.githubusercontent.com/${this.host.repo()}/main/store`; }
+  // raw.githubusercontent.com can lag a few minutes behind a push; the GitHub API answers at once
+  async get(file) {
+    let r = await this.host.fetch(`${this.base()}/${file}`, { headers: { 'User-Agent': 'Prism' } });
+    if (!r.ok) {
+      const api = await this.host.fetch(`https://api.github.com/repos/${this.host.repo()}/contents/store/${file}?ref=main`, { headers: { 'User-Agent': 'Prism', Accept: 'application/vnd.github.raw' } }).catch(() => null);
+      if (api && api.ok) r = api;
+    }
+    return r;
+  }
   async store() {
-    const r = await this.host.fetch(`${this.base()}/index.json?t=${Date.now()}`, { headers: { 'User-Agent': 'Prism' } });
+    const r = await this.get('index.json');
     if (!r.ok) throw new Error(`The theme store answered ${r.status}.`);
     const idx = await r.json();
     return (Array.isArray(idx.themes) ? idx.themes : []).filter(t => t && ID.test(t.id || '')).map(t => ({
@@ -50,7 +59,7 @@ class Themes {
   }
   async install(id) {
     if (!ID.test(id || '')) throw new Error('Unknown theme.');
-    const r = await this.host.fetch(`${this.base()}/themes/${id}.json`, { headers: { 'User-Agent': 'Prism' } });
+    const r = await this.get(`themes/${id}.json`);
     if (!r.ok) throw new Error(`Could not download the theme (${r.status}).`);
     const t = validTheme(await r.json());
     if (!t) throw new Error('That theme file is not valid.');

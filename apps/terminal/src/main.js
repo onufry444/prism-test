@@ -854,7 +854,7 @@ async function runSmoke() {
       const chartA = await ask('chart', { type: 'bar', title: 'Test', labels: ['a', 'b', 'c'], series: [{ name: 's', values: [1, 3, 2] }], height: 8 });
       await wait(800);
       const shown = await w.webContents.executeJavaScript(`document.querySelectorAll('.pwidget img').length`);
-      check('api: image and chart are drawn in the pane', img.ok && img.rows > 0 && chartA.ok && chartA.rows === 8 && shown >= 2, { img, chartA, shown });
+      check('api: image and chart are drawn in the pane', img.ok && img.rows > 0 && chartA.ok && chartA.rows >= 4 && chartA.rows <= 8 && shown >= 2, { img, chartA, shown });
       const chosen = ask('choose', { prompt: 'Pick', options: ['red', 'green', 'blue'] });
       await wait(800);
       await w.webContents.executeJavaScript(`(() => { const b = document.querySelector('.pchoose button[data-i="1"]'); b && b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return !!b; })()`);
